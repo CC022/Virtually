@@ -6,39 +6,129 @@
 	objectVersion = 90;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* VirtuallyKit.framework in Frameworks (app) */ = {isa = PBXBuildFile; fileRef = A30000000000000000000002 /* VirtuallyKit.framework */; };
+		A10000000000000000000002 /* VirtuallyKit.framework in Frameworks (cli) */ = {isa = PBXBuildFile; fileRef = A30000000000000000000002 /* VirtuallyKit.framework */; };
+		A10000000000000000000003 /* VirtuallyKit.framework in Frameworks (tests) */ = {isa = PBXBuildFile; fileRef = A30000000000000000000002 /* VirtuallyKit.framework */; };
+		A10000000000000000000004 /* GuestAgent in Resources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000010 /* GuestAgent */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A20000000000000000000001 /* VirtuallyKit for app */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000002;
+			remoteInfo = VirtuallyKit;
+		};
+		A20000000000000000000002 /* VirtuallyKit for cli */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000002;
+			remoteInfo = VirtuallyKit;
+		};
+		A20000000000000000000003 /* VirtuallyKit for tests */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000002;
+			remoteInfo = VirtuallyKit;
+		};
+		A20000000000000000000004 /* virtually for app */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B00000000000000000000003;
+			remoteInfo = VirtuallyCLI;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		000000000000000000000120 /* Virtually.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Virtually.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000001 /* Virtually.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Virtually.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000002 /* VirtuallyKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = VirtuallyKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000003 /* virtually */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = virtually; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000004 /* VirtuallyKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VirtuallyKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000000000000000000010 /* GuestAgent */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GuestAgent; sourceTree = "<group>"; };
+		A30000000000000000000011 /* docs */ = {isa = PBXFileReference; lastKnownFileType = folder; path = docs; sourceTree = "<group>"; };
+		A30000000000000000000012 /* ThirdParty */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ThirdParty; sourceTree = "<group>"; };
+		A30000000000000000000013 /* Scripts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Scripts; sourceTree = "<group>"; };
+		A30000000000000000000014 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		000000000000000000000010 /* Virtually */ = {
+		A40000000000000000000001 /* Virtually */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Virtually;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000002 /* VirtuallyKit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VirtuallyKit;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000003 /* VirtuallyCLI */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VirtuallyCLI;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000004 /* VirtuallyKitTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = VirtuallyKitTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		000000000000000130000000 /* Frameworks */ = {
+		A50000000000000000000001 /* Frameworks (app) */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				A10000000000000000000001 /* VirtuallyKit.framework in Frameworks */,
+			);
+		};
+		A50000000000000000000002 /* Frameworks (kit) */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		A50000000000000000000003 /* Frameworks (cli) */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				A10000000000000000000002 /* VirtuallyKit.framework in Frameworks */,
+			);
+		};
+		A50000000000000000000004 /* Frameworks (tests) */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				A10000000000000000000003 /* VirtuallyKit.framework in Frameworks */,
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		000000000000000000000001 = {
+		A60000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000010 /* Virtually */,
-				000000000000000000000020 /* Products */,
+				A30000000000000000000014 /* README.md */,
+				A40000000000000000000001 /* Virtually */,
+				A40000000000000000000002 /* VirtuallyKit */,
+				A40000000000000000000003 /* VirtuallyCLI */,
+				A40000000000000000000004 /* VirtuallyKitTests */,
+				A30000000000000000000010 /* GuestAgent */,
+				A30000000000000000000013 /* Scripts */,
+				A30000000000000000000012 /* ThirdParty */,
+				A30000000000000000000011 /* docs */,
+				A60000000000000000000002 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		000000000000000000000020 /* Products */ = {
+		A60000000000000000000002 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000120 /* Virtually.app */,
+				A30000000000000000000001 /* Virtually.app */,
+				A30000000000000000000002 /* VirtuallyKit.framework */,
+				A30000000000000000000003 /* virtually */,
+				A30000000000000000000004 /* VirtuallyKitTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -46,301 +136,393 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		000000000000000100000000 /* Virtually */ = {
+		B00000000000000000000001 /* Virtually */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 000000000000000110000000 /* Build configuration list for PBXNativeTarget "Virtually" */;
+			buildConfigurationList = C00000000000000000000010 /* Build configuration list for PBXNativeTarget "Virtually" */;
 			buildPhases = (
-				000000000000000120000000 /* Sources */,
-				000000000000000130000000 /* Frameworks */,
-				000000000000000140000000 /* Resources */,
+				A70000000000000000000001 /* Sources */,
+				A50000000000000000000001 /* Frameworks */,
+				A80000000000000000000001 /* Resources */,
+				A90000000000000000000001 /* Embed QEMU */,
 			);
 			buildRules = (
 			);
+			dependencies = (
+				AA0000000000000000000001 /* PBXTargetDependency */,
+				AA0000000000000000000004 /* PBXTargetDependency */,
+			);
 			fileSystemSynchronizedGroups = (
-				000000000000000000000010 /* Virtually */,
+				A40000000000000000000001 /* Virtually */,
 			);
 			name = Virtually;
-			productName = MyApp;
-			productReference = 000000000000000000000120 /* Virtually.app */;
+			productName = Virtually;
+			productReference = A30000000000000000000001 /* Virtually.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B00000000000000000000002 /* VirtuallyKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000020 /* Build configuration list for PBXNativeTarget "VirtuallyKit" */;
+			buildPhases = (
+				A70000000000000000000002 /* Sources */,
+				A50000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A40000000000000000000002 /* VirtuallyKit */,
+			);
+			name = VirtuallyKit;
+			productName = VirtuallyKit;
+			productReference = A30000000000000000000002 /* VirtuallyKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		B00000000000000000000003 /* VirtuallyCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000030 /* Build configuration list for PBXNativeTarget "VirtuallyCLI" */;
+			buildPhases = (
+				A70000000000000000000003 /* Sources */,
+				A50000000000000000000003 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000000000000000000002 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A40000000000000000000003 /* VirtuallyCLI */,
+			);
+			name = VirtuallyCLI;
+			productName = virtually;
+			productReference = A30000000000000000000003 /* virtually */;
+			productType = "com.apple.product-type.tool";
+		};
+		B00000000000000000000004 /* VirtuallyKitTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000040 /* Build configuration list for PBXNativeTarget "VirtuallyKitTests" */;
+			buildPhases = (
+				A70000000000000000000004 /* Sources */,
+				A50000000000000000000004 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000000000000000000003 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A40000000000000000000004 /* VirtuallyKitTests */,
+			);
+			name = VirtuallyKitTests;
+			productName = VirtuallyKitTests;
+			productReference = A30000000000000000000004 /* VirtuallyKitTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		000000000000000000000000 /* Project object */ = {
+		A00000000000000000000000 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
-				TargetAttributes = {
-					000000000000000100000000 = {
-						CreatedOnToolsVersion = 26.3;
-					};
-				};
 			};
-			buildConfigurationList = 000000000000000010000000 /* Build configuration list for PBXProject "Virtually" */;
-			developmentRegion = en;
+			buildConfigurationList = C00000000000000000000000 /* Build configuration list for PBXProject "Virtually" */;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
+				"zh-Hans",
 				Base,
 			);
-			mainGroup = 000000000000000000000001;
+			mainGroup = A60000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 90;
-			productRefGroup = 000000000000000000000020 /* Products */;
+			productRefGroup = A60000000000000000000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				000000000000000100000000 /* Virtually */,
+				B00000000000000000000001 /* Virtually */,
+				B00000000000000000000002 /* VirtuallyKit */,
+				B00000000000000000000003 /* VirtuallyCLI */,
+				B00000000000000000000004 /* VirtuallyKitTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		000000000000000140000000 /* Resources */ = {
+		A80000000000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
+				A10000000000000000000004 /* GuestAgent in Resources */,
 			);
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		A90000000000000000000001 /* Embed QEMU */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed QEMU";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			shellPath = /bin/sh;
+			shellScript = "exec \"$SRCROOT/Scripts/embed-qemu.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
-		000000000000000120000000 /* Sources */ = {
+		A70000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		A70000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		A70000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		A70000000000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		AA0000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000002 /* VirtuallyKit */;
+			targetProxy = A20000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		AA0000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000002 /* VirtuallyKit */;
+			targetProxy = A20000000000000000000002 /* PBXContainerItemProxy */;
+		};
+		AA0000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000002 /* VirtuallyKit */;
+			targetProxy = A20000000000000000000003 /* PBXContainerItemProxy */;
+		};
+		AA0000000000000000000004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B00000000000000000000003 /* VirtuallyCLI */;
+			targetProxy = A20000000000000000000004 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		000000000000000011000000 /* Debug configuration for PBXProject "Virtually" */ = {
+		C00000000000000000000001 /* Debug (project) */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DRIVERKIT_DEPLOYMENT_TARGET = 27.0;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.6.2;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1;
 				ONLY_ACTIVE_ARCH = YES;
-				PROJECT_UNIQUE_VALUE = U7Y56G2W;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				TVOS_DEPLOYMENT_TARGET = 27.0;
-				WATCHOS_DEPLOYMENT_TARGET = 27.0;
-				XROS_DEPLOYMENT_TARGET = 27.0;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
-		000000000000000012000000 /* Release configuration for PBXProject "Virtually" */ = {
+		C00000000000000000000002 /* Release (project) */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DRIVERKIT_DEPLOYMENT_TARGET = 27.0;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.6.2;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				PROJECT_UNIQUE_VALUE = U7Y56G2W;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 0.1;
+				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				TVOS_DEPLOYMENT_TARGET = 27.0;
-				WATCHOS_DEPLOYMENT_TARGET = 27.0;
-				XROS_DEPLOYMENT_TARGET = 27.0;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
-		000000000000000111000000 /* Debug configuration for PBXNativeTarget "Virtually" */ = {
+		C00000000000000000000011 /* Debug (app) */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				INFOPLIST_KEY_CFBundleDisplayName = Virtually;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.Virtually;
+				PRODUCT_NAME = Virtually;
 			};
 			name = Debug;
 		};
-		000000000000000112000000 /* Release configuration for PBXNativeTarget "Virtually" */ = {
+		C00000000000000000000012 /* Release (app) */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SELECTED_FILES = readonly;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "devplaceholder.$(PROJECT_UNIQUE_VALUE:identifier).$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				INFOPLIST_KEY_CFBundleDisplayName = Virtually;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.Virtually;
+				PRODUCT_NAME = Virtually;
+			};
+			name = Release;
+		};
+		C00000000000000000000021 /* Debug (kit) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.VirtuallyKit;
+				PRODUCT_NAME = VirtuallyKit;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		C00000000000000000000022 /* Release (kit) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				DEFINES_MODULE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACH_O_TYPE = staticlib;
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.VirtuallyKit;
+				PRODUCT_NAME = VirtuallyKit;
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+		C00000000000000000000031 /* Debug (cli) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.cli;
+				PRODUCT_MODULE_NAME = VirtuallyCLI;
+				PRODUCT_NAME = virtually;
+			};
+			name = Debug;
+		};
+		C00000000000000000000032 /* Release (cli) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.cli;
+				PRODUCT_MODULE_NAME = VirtuallyCLI;
+				PRODUCT_NAME = virtually;
+			};
+			name = Release;
+		};
+		C00000000000000000000041 /* Debug (tests) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.VirtuallyKitTests;
+				PRODUCT_NAME = VirtuallyKitTests;
+			};
+			name = Debug;
+		};
+		C00000000000000000000042 /* Release (tests) */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = org.virtually.VirtuallyKitTests;
+				PRODUCT_NAME = VirtuallyKitTests;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		000000000000000010000000 /* Build configuration list for PBXProject "Virtually" */ = {
+		C00000000000000000000000 /* Build configuration list for PBXProject "Virtually" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				000000000000000011000000 /* Debug configuration for PBXProject "Virtually" */,
-				000000000000000012000000 /* Release configuration for PBXProject "Virtually" */,
+				C00000000000000000000001 /* Debug */,
+				C00000000000000000000002 /* Release */,
 			);
 			defaultConfigurationName = Release;
 		};
-		000000000000000110000000 /* Build configuration list for PBXNativeTarget "Virtually" */ = {
+		C00000000000000000000010 /* Build configuration list for PBXNativeTarget "Virtually" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				000000000000000111000000 /* Debug configuration for PBXNativeTarget "Virtually" */,
-				000000000000000112000000 /* Release configuration for PBXNativeTarget "Virtually" */,
+				C00000000000000000000011 /* Debug */,
+				C00000000000000000000012 /* Release */,
+			);
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000020 /* Build configuration list for PBXNativeTarget "VirtuallyKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000021 /* Debug */,
+				C00000000000000000000022 /* Release */,
+			);
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000030 /* Build configuration list for PBXNativeTarget "VirtuallyCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000031 /* Debug */,
+				C00000000000000000000032 /* Release */,
+			);
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000040 /* Build configuration list for PBXNativeTarget "VirtuallyKitTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000041 /* Debug */,
+				C00000000000000000000042 /* Release */,
 			);
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 000000000000000000000000 /* Project object */;
+	rootObject = A00000000000000000000000 /* Project object */;
 }

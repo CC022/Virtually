@@ -1,0 +1,512 @@
+--- /dev/null	2026-09-12 14:22:34
++++ b/ui/macos.c	2026-09-12 14:21:50
+@@ -0,0 +1,446 @@
++/*
++ * QEMU macOS 嵌入式显示后端 —— 供 Virtually 宿主应用使用
++ *
++ * 与 ui/cocoa.m 的区别:本后端**不创建任何窗口**,只把画面发布到一块
++ * 共享内存,并通过一个 Unix socket 与宿主 app 交换事件。窗口、合成、
++ * 光标绘制与刷新节奏全部由宿主 app 掌控。
++ *
++ * 之所以这样设计:
++ *   1. 画面走共享 mmap,宿主侧用 MTLBuffer(bytesNoCopy:) 直接映射同一块内存,
++ *      在 Apple Silicon 的统一内存上是真正的零拷贝,不经任何编解码。
++ *   2. 刷新由宿主的 CADisplayLink 驱动,而不是 QEMU 内置的固定定时器
++ *      (ui/console.h 的 GUI_REFRESH_INTERVAL_DEFAULT 写死 30ms ≈ 33fps)。
++ *   3. 光标位图上报给宿主,由宿主用自己的鼠标位置绘制,与 guest 帧率解耦 ——
++ *      光标位置绕 guest 一整个来回是「鼠标不跟手」的直接原因。
++ *
++ * 用法:
++ *   -display macos,fb=/path/to/fb.bin,sock=/path/to/ctl.sock
++ *
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ */
++
++#include "qemu/osdep.h"
++
++#include <sys/mman.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++
++#include "qemu/module.h"
++#include "qemu/error-report.h"
++#include "qemu/cutils.h"
++#include "qemu/main-loop.h"
++#include "qemu/thread.h"
++#include "ui/console.h"
++#include "ui/input.h"
++#include "ui/surface.h"
++
++/* ---- 线协议 ------------------------------------------------------------
++ * 定长 20 字节记录,小端。CURSOR 在记录后跟 w*h*4 字节 ARGB 像素。
++ */
++#define MSG_RESIZE      1   /* a=width b=height c=stride                    */
++#define MSG_DAMAGE      2   /* a=x b=y c=w d=h                              */
++#define MSG_CURSOR      3   /* a=w b=h c=hot_x d=hot_y,后跟像素            */
++#define MSG_CURSOR_VIS  4   /* a=on b=guest 认为的光标 x c=y                */
++
++#define MSG_MOUSE_ABS   10  /* a=x b=y(guest 像素)                        */
++#define MSG_MOUSE_BTN   11  /* a=button b=down                              */
++#define MSG_SCROLL      12  /* a=dy 格数(正数向上) b=dx 格数(正数向左)  */
++#define MSG_KEY         13  /* a=qcode b=down                               */
++#define MSG_UI_INFO     14  /* a=width b=height(请求 guest 改分辨率)       */
++
++typedef struct {
++    int32_t type;
++    int32_t a, b, c, d;
++} MacosMsg;
++
++typedef struct {
++    DisplayChangeListener dcl;
++    DisplaySurface *surface;
++
++    char *fb_path;
++    char *sock_path;
++
++    int fb_fd;
++    uint8_t *fb_map;
++    size_t fb_size;
++    int fb_width, fb_height;
++    size_t fb_stride;   /* 按 256 对齐,供宿主零拷贝建 Metal 纹理 */
++
++    int sock;
++    QemuMutex send_lock;
++
++    /* 脏区在 dpy_gfx_update 里累积成一个包围盒,到 dpy_refresh 时才发一条 ——
++     * 这样 socket 流量被刷新率天然限流,也避免高频小矩形把管道打满。 */
++    bool damage_pending;
++    int dx0, dy0, dx1, dy1;
++} MacosDisplay;
++
++static MacosDisplay *md;
++
++/* ---- socket 发送 ------------------------------------------------------- */
++
++static void macos_send(const void *buf, size_t len)
++{
++    const uint8_t *p = buf;
++    size_t off = 0;
++
++    if (md->sock < 0) {
++        return;
++    }
++    qemu_mutex_lock(&md->send_lock);
++    while (off < len) {
++        ssize_t n = write(md->sock, p + off, len - off);
++        if (n > 0) {
++            off += n;
++            continue;
++        }
++        if (n < 0 && (errno == EINTR)) {
++            continue;
++        }
++        /* 宿主断开或管道异常:关掉,不要让 VM 卡在写上 */
++        close(md->sock);
++        md->sock = -1;
++        break;
++    }
++    qemu_mutex_unlock(&md->send_lock);
++}
++
++static void macos_send_msg(int32_t type, int32_t a, int32_t b, int32_t c, int32_t d)
++{
++    MacosMsg m = { type, a, b, c, d };
++    macos_send(&m, sizeof(m));
++}
++
++/* ---- 共享帧缓冲 -------------------------------------------------------- */
++
++static void macos_fb_release(void)
++{
++    if (md->fb_map) {
++        munmap(md->fb_map, md->fb_size);
++        md->fb_map = NULL;
++    }
++    if (md->fb_fd >= 0) {
++        close(md->fb_fd);
++        md->fb_fd = -1;
++    }
++    md->fb_size = 0;
++}
++
++/* Apple GPU 的 minimumLinearTextureAlignment 通常是 256 字节。
++ * 共享缓冲按此对齐,宿主才能用 MTLBuffer.makeTexture 直接在这块内存上建纹理,
++ * 否则就得每帧再拷一次,零拷贝就白做了。 */
++#define MACOS_FB_ALIGN 256
++
++static bool macos_fb_resize(int width, int height)
++{
++    size_t stride = ROUND_UP((size_t)width * 4, MACOS_FB_ALIGN);
++    size_t size = stride * height;
++
++    /* virtio-gpu 会以相同尺寸反复 set_scanout。此时必须复用现有映射:
++     * 重建会 O_TRUNC 把文件截到 0 再增长,而宿主那边还挂着共享 mmap,
++     * 截断期间访问会 SIGBUS。 */
++    if (md->fb_map && md->fb_width == width && md->fb_height == height &&
++        md->fb_stride == stride) {
++        return true;
++    }
++
++    macos_fb_release();
++
++    md->fb_fd = open(md->fb_path, O_RDWR | O_CREAT | O_TRUNC, 0600);
++    if (md->fb_fd < 0) {
++        error_report("macos display: 无法打开帧缓冲文件 %s: %s",
++                     md->fb_path, strerror(errno));
++        return false;
++    }
++    if (ftruncate(md->fb_fd, size) != 0) {
++        error_report("macos display: ftruncate 失败: %s", strerror(errno));
++        return false;
++    }
++    md->fb_map = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, md->fb_fd, 0);
++    if (md->fb_map == MAP_FAILED) {
++        md->fb_map = NULL;
++        error_report("macos display: mmap 失败: %s", strerror(errno));
++        return false;
++    }
++    md->fb_size = size;
++    md->fb_stride = stride;
++    md->fb_width = width;
++    md->fb_height = height;
++    return true;
++}
++
++/* 把脏区从 guest 的 pixman 缓冲拷进共享帧缓冲 */
++static void macos_blit(int x, int y, int w, int h)
++{
++    pixman_image_t *img;
++    const uint8_t *src;
++    int src_stride, row;
++    size_t dst_stride;
++
++    if (!md->surface || !md->fb_map) {
++        return;
++    }
++    img = md->surface->image;
++    if (pixman_image_get_width(img) != md->fb_width ||
++        pixman_image_get_height(img) != md->fb_height) {
++        return;
++    }
++
++    if (x < 0) { w += x; x = 0; }
++    if (y < 0) { h += y; y = 0; }
++    if (x + w > md->fb_width)  { w = md->fb_width - x; }
++    if (y + h > md->fb_height) { h = md->fb_height - y; }
++    if (w <= 0 || h <= 0) {
++        return;
++    }
++
++    src = (const uint8_t *)pixman_image_get_data(img);
++    src_stride = pixman_image_get_stride(img);
++    dst_stride = md->fb_stride;
++
++    for (row = 0; row < h; row++) {
++        memcpy(md->fb_map + (size_t)(y + row) * dst_stride + (size_t)x * 4,
++               src + (size_t)(y + row) * src_stride + (size_t)x * 4,
++               (size_t)w * 4);
++    }
++}
++
++/* ---- DisplayChangeListener 回调 ---------------------------------------- */
++
++static void macos_gfx_switch(DisplayChangeListener *dcl, DisplaySurface *surface)
++{
++    int w = surface_width(surface);
++    int h = surface_height(surface);
++
++    md->surface = surface;
++    if (!macos_fb_resize(w, h)) {
++        return;
++    }
++    macos_blit(0, 0, w, h);
++    macos_send_msg(MSG_RESIZE, w, h, (int32_t)md->fb_stride, 0);
++    md->damage_pending = false;
++}
++
++static void macos_gfx_update(DisplayChangeListener *dcl, int x, int y, int w, int h)
++{
++    macos_blit(x, y, w, h);
++
++    if (!md->damage_pending) {
++        md->damage_pending = true;
++        md->dx0 = x;         md->dy0 = y;
++        md->dx1 = x + w;     md->dy1 = y + h;
++    } else {
++        if (x < md->dx0)         { md->dx0 = x; }
++        if (y < md->dy0)         { md->dy0 = y; }
++        if (x + w > md->dx1)     { md->dx1 = x + w; }
++        if (y + h > md->dy1)     { md->dy1 = y + h; }
++    }
++}
++
++static void macos_refresh(DisplayChangeListener *dcl)
++{
++    graphic_hw_update(dcl->con);
++
++    if (md->damage_pending) {
++        macos_send_msg(MSG_DAMAGE, md->dx0, md->dy0,
++                       md->dx1 - md->dx0, md->dy1 - md->dy0);
++        md->damage_pending = false;
++    }
++}
++
++static void macos_mouse_set(DisplayChangeListener *dcl, int x, int y, bool on)
++{
++    /* 位置不用于绘制光标 —— 那要绕 guest 一整个来回,是鼠标滞后的根源。
++     * 但把它带上仍有价值:宿主可以拿它和自己发出去的坐标比对,
++     * 直接量化出「输入 → guest 处理 → 上报」这条链路的延迟。 */
++    macos_send_msg(MSG_CURSOR_VIS, on, x, y, 0);
++}
++
++static void macos_cursor_define(DisplayChangeListener *dcl, QEMUCursor *c)
++{
++    fprintf(stderr, "[macos] cursor_define %dx%d hot=(%d,%d)\n",
++            c->width, c->height, c->hot_x, c->hot_y);
++    MacosMsg m = { MSG_CURSOR, c->width, c->height, c->hot_x, c->hot_y };
++    size_t pixels = (size_t)c->width * c->height * 4;
++    uint8_t *buf = g_malloc(sizeof(m) + pixels);
++
++    memcpy(buf, &m, sizeof(m));
++    memcpy(buf + sizeof(m), c->data, pixels);
++    macos_send(buf, sizeof(m) + pixels);
++    g_free(buf);
++}
++
++static const DisplayChangeListenerOps macos_dcl_ops = {
++    .dpy_name         = "macos",
++    .dpy_gfx_update   = macos_gfx_update,
++    .dpy_gfx_switch   = macos_gfx_switch,
++    .dpy_refresh      = macos_refresh,
++    .dpy_mouse_set    = macos_mouse_set,
++    .dpy_cursor_define = macos_cursor_define,
++};
++
++/* ---- 输入:宿主 → guest ------------------------------------------------ */
++
++static const InputButton macos_buttons[] = {
++    INPUT_BUTTON_LEFT, INPUT_BUTTON_MIDDLE, INPUT_BUTTON_RIGHT,
++};
++
++static void macos_handle_input(const MacosMsg *m)
++{
++    QemuConsole *con = md->dcl.con;
++
++    switch (m->type) {
++    case MSG_MOUSE_ABS:
++        qemu_input_queue_abs(con, INPUT_AXIS_X, m->a, 0, md->fb_width);
++        qemu_input_queue_abs(con, INPUT_AXIS_Y, m->b, 0, md->fb_height);
++        qemu_input_event_sync();
++        break;
++
++    case MSG_MOUSE_BTN:
++        if (m->a >= 0 && m->a < (int)ARRAY_SIZE(macos_buttons)) {
++            qemu_input_queue_btn(con, macos_buttons[m->a], m->b != 0);
++            qemu_input_event_sync();
++        }
++        break;
++
++    case MSG_SCROLL: {
++        /* 一条消息可以带好几格:以前不管 a 是几都只发一格,快滚时 3 格变 1 格。 */
++        int32_t n;
++        for (n = 0; n < (m->a < 0 ? -m->a : m->a) && n < 32; n++) {
++            InputButton b = m->a > 0 ? INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
++            qemu_input_queue_btn(con, b, true);
++            qemu_input_event_sync();
++            qemu_input_queue_btn(con, b, false);
++            qemu_input_event_sync();
++        }
++        for (n = 0; n < (m->b < 0 ? -m->b : m->b) && n < 32; n++) {
++            InputButton b = m->b > 0 ? INPUT_BUTTON_WHEEL_LEFT : INPUT_BUTTON_WHEEL_RIGHT;
++            qemu_input_queue_btn(con, b, true);
++            qemu_input_event_sync();
++            qemu_input_queue_btn(con, b, false);
++            qemu_input_event_sync();
++        }
++        break;
++    }
++
++    case MSG_KEY:
++        qemu_input_event_send_key_qcode(con, m->a, m->b != 0);
++        break;
++
++    case MSG_UI_INFO: {
++        QemuUIInfo info;
++        int rc;
++        /* ramfb 不支持 ui_info,而 dpy_get_ui_info 对不支持的 console 是 assert ——
++         * 安装期(ramfb)拖一下窗口整个 QEMU 就 abort,装到最后一步弹出「意外退出」。
++         * 宿主侧现在也不会在 ramfb 下发这条,这里再挡一次以防万一。 */
++        if (!dpy_ui_info_supported(con)) {
++            fprintf(stderr, "[macos] ui_info %dx%d 忽略:当前显示设备不支持\n", m->a, m->b);
++            break;
++        }
++        info = *dpy_get_ui_info(con);
++        info.width = m->a;
++        info.height = m->b;
++        /* delay=false:宿主侧已经自己做了防抖(拖拽停稳 200ms 才发一次),
++         * 再叠 QEMU 内置的 1000ms 就是白等一秒,缩放跟手感很差。
++         *
++         * 早期确实用过 delay=true —— 那时宿主每个 resize 事件都发,不防抖的话
++         * guest 被持续重新通知,永远等不到稳定值。防抖挪到宿主侧之后就不需要了。
++         *
++         * 注意 width/height 必须非零:virtio_gpu_ui_info 里
++         * `if (info->width && info->height)` 为假会**关掉这个输出**,
++         * 画面变成 "Display output is not active"。 */
++        rc = dpy_set_ui_info(con, &info, false);
++        fprintf(stderr, "[macos] ui_info %dx%d supported=%d rc=%d\n",
++                m->a, m->b, dpy_ui_info_supported(con), rc);
++        break;
++    }
++
++    default:
++        break;
++    }
++}
++
++static void *macos_reader_thread(void *arg)
++{
++    MacosMsg m;
++
++    for (;;) {
++        size_t off = 0;
++        while (off < sizeof(m)) {
++            ssize_t n = read(md->sock, (uint8_t *)&m + off, sizeof(m) - off);
++            if (n > 0) {
++                off += n;
++            } else if (n < 0 && errno == EINTR) {
++                continue;
++            } else {
++                return NULL;   /* 宿主断开 */
++            }
++        }
++        bql_lock();
++        macos_handle_input(&m);
++        bql_unlock();
++    }
++    return NULL;
++}
++
++/* ---- 初始化 ------------------------------------------------------------ */
++
++static int macos_connect(const char *path)
++{
++    struct sockaddr_un addr;
++    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
++
++    if (fd < 0) {
++        return -1;
++    }
++    memset(&addr, 0, sizeof(addr));
++    addr.sun_family = AF_UNIX;
++    pstrcpy(addr.sun_path, sizeof(addr.sun_path), path);
++    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
++        close(fd);
++        return -1;
++    }
++    return fd;
++}
++
++static void macos_display_init(DisplayState *ds, DisplayOptions *opts)
++{
++    QemuThread thread;
++
++    md = g_new0(MacosDisplay, 1);
++    md->fb_fd = -1;
++    md->sock = -1;
++    md->fb_path = g_strdup(opts->u.macos.fb ?: "/tmp/virtually-fb.bin");
++    md->sock_path = g_strdup(opts->u.macos.sock ?: "/tmp/virtually-ctl.sock");
++    qemu_mutex_init(&md->send_lock);
++
++    md->sock = macos_connect(md->sock_path);
++    if (md->sock < 0) {
++        error_report("macos display: 无法连接宿主 %s: %s",
++                     md->sock_path, strerror(errno));
++        exit(1);
++    }
++
++    md->dcl.con = qemu_console_lookup_default();
++    md->dcl.ops = &macos_dcl_ops;
++    /* 刷新节奏:QEMU 侧给足余量(~125Hz),真正的呈现节奏由宿主的
++     * CADisplayLink 决定。比改全局常量 GUI_REFRESH_INTERVAL_DEFAULT 干净,
++     * 因为它只影响本后端。 */
++    md->dcl.update_interval = 8;
++    register_displaychangelistener(&md->dcl);
++
++    qemu_thread_create(&thread, "macos-input", macos_reader_thread,
++                       NULL, QEMU_THREAD_DETACHED);
++}
++
++static QemuDisplay qemu_display_macos = {
++    .type = DISPLAY_TYPE_MACOS,
++    .init = macos_display_init,
++};
++
++static void register_macos(void)
++{
++    qemu_display_register(&qemu_display_macos);
++}
++
++type_init(register_macos);
+--- a/ui/meson.build	2025-05-28 15:05:47
++++ b/ui/meson.build	2026-09-07 23:41:23
+@@ -30,6 +30,7 @@
+   system_ss.add(files('input-linux.c', 'udmabuf.c'))
+ endif
+ system_ss.add(when: cocoa, if_true: files('cocoa.m'))
++system_ss.add(when: cocoa, if_true: files('macos.c'))
+ 
+ vnc_ss = ss.source_set()
+ vnc_ss.add(files(
+--- a/qapi/ui.json	2025-05-28 15:05:46
++++ b/qapi/ui.json	2026-09-07 23:41:45
+@@ -1448,6 +1448,24 @@
+   } }
+ 
+ ##
++# @DisplayMacos:
++#
++# 嵌入式 macOS 显示后端:不创建窗口,把画面发布到共享内存,
++# 通过 Unix socket 与宿主 app 交换事件。
++#
++# @fb: 共享帧缓冲文件路径
++#
++# @sock: 与宿主通信的 Unix socket 路径
++#
++# Since: 10.0
++##
++{ 'struct': 'DisplayMacos',
++  'data': {
++      '*fb': 'str',
++      '*sock': 'str'
++  } }
++
++##
+ # @HotKeyMod:
+ #
+ # Set of modifier keys that need to be held for shortcut key actions.
+@@ -1499,6 +1517,9 @@
+ #
+ # @cocoa: The Cocoa user interface.
+ #
++# @macos: 嵌入式 macOS 后端:不创建窗口,把画面发布到共享内存,
++#     通过 Unix socket 与宿主应用交换输入与光标事件。(Since 10.0)
++#
+ # @spice-app: Set up a Spice server and run the default associated
+ #     application to connect to it.  The server will redirect the
+ #     serial console and QEMU monitors.  (Since 4.0)
+@@ -1516,6 +1537,7 @@
+     { 'name': 'egl-headless', 'if': 'CONFIG_OPENGL' },
+     { 'name': 'curses', 'if': 'CONFIG_CURSES' },
+     { 'name': 'cocoa', 'if': 'CONFIG_COCOA' },
++    { 'name': 'macos', 'if': 'CONFIG_COCOA' },
+     { 'name': 'spice-app', 'if': 'CONFIG_SPICE' },
+     { 'name': 'dbus', 'if': 'CONFIG_DBUS_DISPLAY' }
+   ]
+@@ -1551,6 +1573,7 @@
+   'data'    : {
+       'gtk': { 'type': 'DisplayGTK', 'if': 'CONFIG_GTK' },
+       'cocoa': { 'type': 'DisplayCocoa', 'if': 'CONFIG_COCOA' },
++      'macos': { 'type': 'DisplayMacos', 'if': 'CONFIG_COCOA' },
+       'curses': { 'type': 'DisplayCurses', 'if': 'CONFIG_CURSES' },
+       'egl-headless': { 'type': 'DisplayEGLHeadless',
+                         'if': 'CONFIG_OPENGL' },

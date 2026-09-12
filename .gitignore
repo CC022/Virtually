@@ -1,0 +1,18 @@
+.DS_Store
+
+# Xcode
+xcuserdata/
+DerivedData/
+build/
+
+# 第三方源码与构建树(QEMU、glib、pixman、libusb、pkgconf),由 ThirdParty/qemu 下的脚本生成
+ThirdParty/qemu/src/
+ThirdParty/qemu/build/
+ThirdParty/qemu/sysroot/
+
+# 二进制介质:固件变量、工具盘、磁盘镜像、ISO
+*.fd
+*.img
+*.iso
+*.qcow2
+*.bin

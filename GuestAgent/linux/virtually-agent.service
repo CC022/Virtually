@@ -1,0 +1,14 @@
+# system 角色:持有 virtio-serial 端口。root、开机即起、死了就重来。
+[Unit]
+Description=Virtually Guest Agent (system)
+After=systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/virtually/virtually-agent.py --role system
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

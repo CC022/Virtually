@@ -1,0 +1,17 @@
+# session 角色:管必须有交互桌面的命令(分辨率、剪贴板)。
+# 挂在 graphical-session.target 上 —— GNOME 登录后才激活,那时
+# WAYLAND_DISPLAY 与会话总线都在环境里了。
+[Unit]
+Description=Virtually Guest Agent (session)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/lib/virtually/virtually-agent.py --role session
+Restart=always
+RestartSec=2
+Environment=VA_SCALE_PERCENT=200
+
+[Install]
+WantedBy=graphical-session.target
