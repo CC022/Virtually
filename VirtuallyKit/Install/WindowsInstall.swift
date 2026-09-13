@@ -531,10 +531,12 @@ public enum SupportImageBuilder {
     ///
     /// 用 `hdiutil attach -imagekey diskimage-class=CRawDiskImage` 是关键 ——
     /// 否则 hdiutil 产出的是 UDIF 容器,QEMU 读不了。
+    /// `drivers` 是 virtio 驱动目录(ToolPaths.virtioDrivers),里面的东西原样拷到盘的根目录。
     public static func build(at image: URL,
                       autounattend: String,
                       agentScript: URL?,
                       installScript: String?,
+                      drivers: URL? = nil,
                       bootFilesFrom isoMount: URL? = nil) throws {
         let fm = FileManager.default
         // 带引导文件时需要 1.5GB(boot.wim 约 671MB);否则 256MB 足够。
@@ -567,6 +569,14 @@ public enum SupportImageBuilder {
             let text = try String(contentsOf: agent, encoding: .utf8)
             try write(text, to: volume.appendingPathComponent("agent.ps1"), bom: true)
         }
+        if let drivers {
+            // 目录结构与 virtio-win ISO 一致(<驱动>/w11/ARM64),install-agent.bat 就能照旧认出这张盘。
+            // 约 4MB,256MB 的盘放得下
+            for item in try fm.contentsOfDirectory(atPath: drivers.path) where !item.hasPrefix(".") {
+                try fm.copyItem(at: drivers.appendingPathComponent(item),
+                                to: volume.appendingPathComponent(item))
+            }
+        }
         if let script = installScript {
             // 相反方向:cmd.exe 同样按系统代码页读 .bat,
             // UTF-8 的中文注释会变乱码**并被当成命令执行**,所以 .bat 必须是纯 ASCII。
@@ -592,6 +602,9 @@ public enum SupportImageBuilder {
     public static let installScript = """
     @echo off
     REM Install virtio drivers, copy agent locally, register logon task.
+    REM The virtio drivers ship inside the app and are copied onto this tools
+    REM disk, laid out like the virtio-win ISO (<driver>\\w11\\ARM64), so the
+    REM VIRTIO lookup below finds the tools disk itself.
     REM
     REM NOTE: this file must stay pure ASCII. cmd.exe reads .bat with the system
     REM codepage (GBK on a Chinese Windows); UTF-8 comments turn into mojibake

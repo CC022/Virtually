@@ -7,12 +7,12 @@
 | | Windows 11 | Ubuntu 26.04 |
 |---|---|---|
 | 安装应答 | `autounattend.xml` | cloud-init 的 `user-data`(内含 `autoinstall` 段) |
-| 安装介质 | `boot.img` 1.5GB(ISO 的引导文件)+ `tools.img` + virtio-win ISO | 一张 CIDATA 盘,几 MB —— grub 直接从 ISO 取内核 |
+| 安装介质 | `boot.img` 1.5GB(ISO 的引导文件)+ `tools.img`(agent 与随 app 打包的 virtio 驱动) | 一张 CIDATA 盘,几 MB —— grub 直接从 ISO 取内核 |
 | 介质构建耗时 | 几分钟(要复制约 700MB) | 几秒 |
 | 安装期显示设备 | `ramfb`(WinPE 没有 viogpudo) | `virtio-gpu-pci`(casper 内核自带驱动,分辨率跟随从安装期就能用) |
 | 安装期系统盘 | `nvme`(viostor 要装完才有) | `virtio-blk-pci`(内核自带),不需要探测盘 |
 | `-rtc base=` | `localtime` | `utc` —— **给错了时钟整体偏一个时区** |
-| 驱动 ISO | 必需 | 不需要 |
+| virtio 驱动 | 随 app 打包,装在工具盘上 | 不需要(内核自带) |
 | 装完的信号 | agent 首次上线 | 同 |
 | agent 装法 | `FirstLogonCommands` 跑 `install-agent.bat` | autoinstall 的 `late-commands`(装完第一次开机 agent 就在) |
 | 自动登录 | `AutoLogon` | `/etc/gdm3/custom.conf` 的 `AutomaticLogin` |

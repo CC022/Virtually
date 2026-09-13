@@ -1243,11 +1243,10 @@ public final class VMSession {
             command.virtioBlkProbe = makeProbeDisk()
         }
         if options.mountTools {
+            // 工具盘上已经带着 virtio 驱动(virtually build-tools 从 app 里拷进去),不再另挂 ISO
             command.extraDrives.append((path: ToolPaths.toolsImage.path,
                                         isCDROM: false, bootIndex: nil))
-            command.extraDrives.append((path: VMInstaller.defaultVirtioISO?.path ?? NSHomeDirectory() + "/Downloads/virtio-win.iso",
-                                        isCDROM: true, bootIndex: nil))
-            print("[tools] 已挂载工具盘与 virtio-win ISO")
+            print("[tools] 已挂载工具盘")
         }
         if let media = options.installMedia {
             command.installing = true

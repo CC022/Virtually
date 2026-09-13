@@ -66,9 +66,9 @@ public enum GuestOS: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// 要不要额外的驱动 ISO。Windows 的显卡/网卡/串口驱动都在 virtio-win 上,
-    /// Linux 内核自带 virtio-blk / virtio-net / virtio-gpu,不需要。
-    public var needsDriverISO: Bool { self == .windows }
+    /// 要不要往工具盘上放 virtio 驱动。Windows 的显卡/网卡/串口驱动都在 virtio-win 里
+    /// (随 app 打包,见 ThirdParty/virtio-win/fetch.sh);Linux 内核自带,不需要。
+    public var needsVirtioDrivers: Bool { self == .windows }
 
     /// `-rtc base=` 的取值。**这一项错了时钟会整体偏一个时区**:
     /// Windows 认为 RTC 存的是本地时间,Linux 认为是 UTC(`/etc/adjtime` 默认 UTC)。
@@ -114,8 +114,8 @@ public struct InstallMedia: Codable, Equatable {
     public var boot: String
     /// agent + install-agent.bat,包内 tools.img
     public var tools: String
-    /// virtio-win 驱动 ISO。**只有 Windows 要**:没有它装完就是黑屏、没网、agent 永远连不上。
-    /// Linux 内核自带 virtio 驱动,这里是 nil。
+    /// 用户自选的 virtio-win 驱动 ISO。现在驱动随 app 打包、放在工具盘上,新装的一律是 nil;
+    /// 留着这个字段是为了读得懂更新之前开始、还没装完的那些配置(那时 ISO 是必需项)。
     public var virtioISO: String?
 
     public init(iso: String, boot: String, tools: String, virtioISO: String? = nil) {

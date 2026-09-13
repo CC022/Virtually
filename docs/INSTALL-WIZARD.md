@@ -43,7 +43,7 @@ WinPE 没有 viogpudo 驱动,`virtio-gpu-pci` 在 ExitBootServices 之后无人�
 
 ## 安装状态是持久化的(2026-09-11)
 
-介质路径(Windows ISO、包内 boot.img / tools.img、virtio-win ISO)写在 `config.json` 的
+介质路径(Windows ISO、包内 boot.img / tools.img)写在 `config.json` 的
 `install` 键里。装到一半退出 app 再打开,资源库卡片标「安装中」,打开时自动带上介质接着装;
 介质文件找不到就在窗口里说清楚,而不是挂一台不带介质的机器去引导半截系统盘。
 安装期点红叉是关机,不是挂起 —— raw 的安装盘本来就存不了快照。
@@ -51,16 +51,19 @@ WinPE 没有 viogpudo 驱动,`virtio-gpu-pci` 在 ExitBootServices 之后无人�
 agent 第一次上线就是安装结束的信号(驱动和 agent 都是首次登录脚本装的)。
 这时清掉 `install` 键,QEMU 退出后删掉包内的 boot.img(1.5GB)、tools.img 和探测盘。
 
-**virtio-win ISO 是必需项**。向导里必须选(默认位置 `~/Downloads/virtio-win.iso` 有就自动填),
-命令行 `virtually install` 找不到就直接退出并说明。以前找不到会静默不挂,装出来的机器没有显卡驱动(黑屏)、
-没有网卡、没有 vioserial(agent 永远连不上),从外面看完全不知道为什么。
+**virtio 驱动随 app 打包**(2026-09-13 起)。没有它装出来的机器没有显卡驱动(黑屏)、没有网卡、
+没有 vioserial(agent 永远连不上),从外面看完全不知道为什么 —— 以前因此把 virtio-win ISO 设成向导里的必需项,
+但新用户手里根本没有这张 837MB 的 ISO。现在 `ThirdParty/virtio-win/fetch.sh` 在构建前从固定版本(0.1.302)
+的官方 ISO 里抽出 9 个 ARM64 驱动(约 4MB,BSD 许可,许可证文本一起带上),「Embed QEMU」构建阶段嵌进
+`Resources/VirtioDrivers`,打工具盘时原样拷到盘的根目录。目录结构与 ISO 一致,install-agent.bat 找驱动盘的逻辑没动,
+找到的就是工具盘自己。向导与 `virtually install` 都不再要 ISO;更新之前开始、还没装完的配置里记着的 ISO 照旧挂。
 
 ## 重启后的交接(已完成)
 
 首次重启时必须**热拔安装盘**,否则会再次从它引导,Windows Setup 弹出
 「似乎你已开始升级,并已从安装介质启动…请移除该介质」并停下等人确认。
 现在 `QMPClient` 在 QMP 的第一个 `RESET` 事件到达时 `device_del` 掉
-`boot.img` 与 ISO,保留 `tools.img` 与 virtio-win ISO 供首次登录装驱动。
+`boot.img` 与 ISO,保留 `tools.img`(上面有 agent 与 virtio 驱动)供首次登录装驱动。
 
 QMP 客户端当初「连上但永远收不到 greeting」的原因见 `VirtuallyKit/Session/QMP.swift` 的注释:
 Swift 的 `String` 把 `"\r\n"` 当成**单个 Character**,

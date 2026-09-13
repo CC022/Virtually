@@ -11,6 +11,7 @@ SwiftUI 宿主负责显示、输入、安装、快照、USB、传文件。文档
 # 第一次:QEMU 与依赖从源码编进 ThirdParty/qemu/sysroot(约 10 分钟)。没编好 app 就构建不过
 ThirdParty/qemu/build-deps.sh
 ThirdParty/qemu/build.sh
+ThirdParty/virtio-win/fetch.sh   # Windows 客户机的 virtio 驱动,嵌进 app(没有它 app 构建不过)
 
 xcodebuild -scheme Virtually build
 xcodebuild -scheme Virtually test
@@ -48,7 +49,7 @@ Scripts/ctl.sh stop              # 先挂起再退出
 - `VirtuallyKitTests`:Swift Testing。断言用 `TestSupport.swift` 的 `expect(条件, "为什么")`,
   QEMU 参数类测试从 `Fixture` 取样例。
 
-「Embed QEMU」构建阶段(`Scripts/embed-qemu.sh`)把 QEMU、dylib、固件拷进 app,依赖改写成 `@rpath` 并逐个签名;
+「Embed QEMU」构建阶段(`Scripts/embed-qemu.sh`)把 QEMU、dylib、固件、virtio 驱动拷进 app,依赖改写成 `@rpath` 并逐个签名;
 `GuestAgent/` 整个目录作为资源拷进 app。位置约定见 `ToolPaths`。
 
 ### 一台虚拟机运行时的样子
@@ -78,7 +79,7 @@ Scripts/ctl.sh stop              # 先挂起再退出
   (Windows `localtime`、Linux `utc`,给错时钟整体偏一个时区)。
 - **guest agent 两份实现一份协议**:`GuestAgent/windows/agent.ps1`(PowerShell 5.1,需 UTF-8 BOM;`.bat` 必须纯 ASCII)
   与 `GuestAgent/linux/virtually-agent.py`,都是 system + session 两段式。改协议时两边与 `AgentChannel` 一起改,并更新 `docs/GUEST-AGENT.md` 的协议段。
-- **安装**:Windows 走 `UnattendGenerator` 生成 `autounattend.xml` + `SupportImageBuilder` 打 FAT32 盘;Ubuntu 走 `AutoinstallGenerator` 的 cloud-init CIDATA 盘。
+- **安装**:Windows 走 `UnattendGenerator` 生成 `autounattend.xml` + `SupportImageBuilder` 打 FAT32 盘(工具盘带 agent 与 virtio 驱动,用户不用自备 ISO);Ubuntu 走 `AutoinstallGenerator` 的 cloud-init CIDATA 盘。
   「装完」的信号是 agent 首次上线。
 - **并发**:Swift 5 语言模式,默认 nonisolated。会话、`AppState`、View 显式 `@MainActor`;
   `QMPClient` / `AgentChannel` / `DisplayChannel` 自带读线程、标 `@unchecked Sendable`,回调 `@Sendable`,

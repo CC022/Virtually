@@ -1,9 +1,10 @@
 #!/bin/bash
-# Xcode 构建阶段「Embed QEMU」:把 QEMU 与它依赖的 dylib 嵌进 Virtually.app,让 app 自包含。
+# Xcode 构建阶段「Embed QEMU」:把 QEMU 与它依赖的 dylib、Windows 的 virtio 驱动嵌进 Virtually.app,让 app 自包含。
 #
 #   Contents/MacOS/qemu-system-aarch64、qemu-img
 #   Contents/Frameworks/lib*.dylib
 #   Contents/Resources/qemu/edk2-aarch64-code.fd、efi-virtio.rom
+#   Contents/Resources/VirtioDrivers/<驱动>/w11/ARM64/…、virtio-win_license.txt
 #
 # 构建树里的 QEMU 按绝对路径链接 ThirdParty/qemu/sysroot/lib 下的 dylib,
 # 这里递归收集这些依赖,统统改成 @rpath,再用 Xcode 的签名身份逐个签名。
@@ -91,6 +92,17 @@ for f in "$MACOS/qemu-system-aarch64" "$MACOS/qemu-img" "$FRAMEWORKS"/lib*.dylib
     fi
 done
 
+# Windows 客户机的 virtio 驱动(ThirdParty/virtio-win/fetch.sh 从官方 ISO 抽出来的 ARM64 那部分,约 4MB)。
+# 装系统时随工具盘挂进 guest,用户不用再自己下 virtio-win.iso。许可证文本一起带上(BSD,再分发要附)。
+DRIVERS_SRC="$SRCROOT/ThirdParty/virtio-win/drivers"
+DRIVERS_DST="$APP/Contents/Resources/VirtioDrivers"
+if [ ! -f "$DRIVERS_SRC/vioserial/w11/ARM64/vioser.inf" ]; then
+    echo "error: 没有 virtio 驱动。先运行 ThirdParty/virtio-win/fetch.sh"
+    exit 1
+fi
+rm -rf "$DRIVERS_DST"
+ditto "$DRIVERS_SRC" "$DRIVERS_DST"
+
 # 签名。Xcode 给了签名身份就用它 —— 同一 Team ID 才能过 Hardened Runtime 的库验证;
 # 没有(ad-hoc)时不开 Hardened Runtime,否则 QEMU 加载不了自己的 dylib。
 IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
@@ -105,4 +117,4 @@ codesign --force --timestamp=none --sign "$IDENTITY" ${RUNTIME[@]+"${RUNTIME[@]}
 codesign --force --timestamp=none --sign "$IDENTITY" ${RUNTIME[@]+"${RUNTIME[@]}"} \
     --entitlements "$QEMU_ROOT/qemu.entitlements" "$MACOS/qemu-system-aarch64"
 
-echo "已嵌入 QEMU:$(ls "$FRAMEWORKS" | grep -c dylib) 个 dylib"
+echo "已嵌入 QEMU:$(ls "$FRAMEWORKS" | grep -c dylib) 个 dylib;virtio 驱动 $(cat "$DRIVERS_DST/VERSION")"

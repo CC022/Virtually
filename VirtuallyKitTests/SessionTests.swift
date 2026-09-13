@@ -118,6 +118,7 @@ struct SessionTests {
         expectEqual(tools.firmware.lastPathComponent, "qemu", "固件在 Resources/qemu")
         expect(tools.windowsAgentScript.path.hasSuffix("GuestAgent/windows/agent.ps1"), "Windows agent 的位置")
         expect(tools.linuxAgentDirectory.path.hasSuffix("GuestAgent/linux"), "Linux agent 的位置")
+        expectEqual(tools.virtioDrivers.lastPathComponent, "VirtioDrivers", "Windows 的 virtio 驱动在 Resources/VirtioDrivers")
         // 运行时写进 bundle 会破坏签名,装在 /Applications 下也没有写权限
         expect(!ToolPaths.toolsImage.path.contains(".app/"), "工具盘不在 app bundle 里")
     }

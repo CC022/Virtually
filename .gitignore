@@ -12,6 +12,9 @@ Config/Local.xcconfig
 ThirdParty/qemu/src/
 ThirdParty/qemu/build/
 ThirdParty/qemu/sysroot/
+# virtio-win 的 ISO 与抽出来的 Windows 驱动,由 ThirdParty/virtio-win/fetch.sh 生成
+ThirdParty/virtio-win/src/
+ThirdParty/virtio-win/drivers/
 
 # 二进制介质:固件变量、工具盘、磁盘镜像、ISO
 *.fd

@@ -287,14 +287,12 @@ private struct NewVMWizard: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openWindow) private var openWindow
 
-    /// 装哪个系统。所有差异都从这里分出去:要不要驱动盘、磁盘下限、默认名、变体列表。
+    /// 装哪个系统。所有差异都从这里分出去:磁盘下限、默认名、变体列表。
     @State private var os = GuestOS.windows
     @State private var name = GuestOS.windows.defaultVMName
     @State private var isoURL: URL?
     /// 镜像认出来是哪个系统。与上面那个下拉不一致就拦住 —— 猜错会格掉一块盘。
     @State private var detectedOS: GuestOS?
-    /// 驱动 ISO。默认位置有就自动填上;没有必须选,否则装出来的机器黑屏没网
-    @State private var virtioURL: URL? = VMInstaller.defaultVirtioISO
     @State private var variants: [InstallVariant] = []
     @State private var variantID: String?
     @State private var inspecting = false
@@ -303,12 +301,8 @@ private struct NewVMWizard: View {
     @State private var diskGB = 64
     @State private var username = "vm"
     @State private var password = "vm"
-    /// 正在选哪张镜像。**一个 View 上只能挂一个 fileImporter**,第二个会把第一个顶掉 ——
-    /// 之前 Windows ISO 和 virtio ISO 各挂一个,结果「安装镜像 → 选择」点了没反应。
-    /// 目标与「面板开没开」必须是两个状态:面板关闭时 isPresented 的 setter 先跑,
-    /// 要是目标也存在同一个变量里,回调看到的就是 nil,选了等于没选。
-    enum Picking { case windows, virtio }
-    @State private var picking: Picking = .windows
+    /// 一个 View 上只能挂一个 fileImporter,第二个会把第一个顶掉。
+    /// (以前 virtio 驱动 ISO 也要用户选,两个选择框抢过同一个位置;现在驱动随 app 打包了。)
     @State private var showPicker = false
     @State private var notes: [String] = []
 
@@ -342,10 +336,7 @@ private struct NewVMWizard: View {
         .frame(width: 460)
         .fileImporter(isPresented: $showPicker, allowedContentTypes: [.diskImage, .data]) { result in
             guard case .success(let url) = result else { return }
-            switch picking {
-            case .windows: pick(url)
-            case .virtio:  virtioURL = url
-            }
+            pick(url)
         }
     }
 
@@ -373,22 +364,8 @@ private struct NewVMWizard: View {
                             .lineLimit(1).truncationMode(.middle)
                         Spacer()
                         if inspecting { ProgressView().controlSize(.small) }
-                        Button("选择…") { picking = .windows; showPicker = true }
+                        Button("选择…") { showPicker = true }
                     }
-                }
-
-                // Linux 内核自带 virtio 驱动,这一行只对 Windows 有意义
-                if os.needsDriverISO {
-                    LabeledContent("virtio 驱动") {
-                        HStack {
-                            Text(virtioURL?.lastPathComponent ?? "未选择")
-                                .foregroundStyle(virtioURL == nil ? .secondary : .primary)
-                                .lineLimit(1).truncationMode(.middle)
-                            Spacer()
-                            Button("选择…") { picking = .virtio; showPicker = true }
-                        }
-                    }
-                    .help("包含 Windows 所需的显卡和网络驱动，必须提供")
                 }
 
                 if !variants.isEmpty {
@@ -426,10 +403,9 @@ private struct NewVMWizard: View {
         }
     }
 
-    /// 缺镜像、缺驱动盘(只 Windows 要)、名字空、正在忙、镜像与所选系统不符 —— 都不让点
+    /// 缺镜像、名字空、正在忙、镜像与所选系统不符 —— 都不让点
     private var canCreate: Bool {
         guard isoURL != nil, !name.isEmpty, !username.isEmpty, phase == nil, !inspecting else { return false }
-        if os.needsDriverISO && virtioURL == nil { return false }
         if let detectedOS, detectedOS != os { return false }
         return true
     }
@@ -490,7 +466,7 @@ private struct NewVMWizard: View {
         Task {
             do {
                 let ref = try await app.createAndInstall(
-                    settings: settings, iso: iso, virtioISO: virtioURL, variantID: variant,
+                    settings: settings, iso: iso, variantID: variant,
                     unattend: unattend, ubuntu: ubuntu,
                     progress: { phase = $0 })
                 dismiss()

@@ -99,7 +99,7 @@ final class AppState {
         let isDebugTarget = debugTarget == ref
         var options = isDebugTarget ? debugLaunch.sessionOptions : VMSession.Options()
         guard tools.isComplete else {
-            launchErrors[ref.path] = "应用不完整：缺少 QEMU 或固件。"
+            launchErrors[ref.path] = "应用不完整：缺少 QEMU、固件或 virtio 驱动。"
             print("[app] \(launchErrors[ref.path]!)")
             return nil
         }
@@ -256,14 +256,14 @@ final class AppState {
 
     /// 新建并安装。建包、构建两张介质盘都是几分钟的阻塞操作,放后台线程跑,
     /// 阶段回调跳回主 actor 给界面。完成后刷新资源库并交出 VMRef,由界面打开虚拟机窗口。
-    func createAndInstall(settings: VMSettings, iso: URL, virtioISO: URL?, variantID: String,
+    func createAndInstall(settings: VMSettings, iso: URL, variantID: String,
                           unattend: UnattendOptions,
                           ubuntu: UbuntuInstallOptions = UbuntuInstallOptions(),
                           progress: @escaping @MainActor (VMInstaller.Phase) -> Void) async throws -> VMRef {
         let libraryURL = libraryURL, tools = tools
         let bundle = try await Task.detached(priority: .userInitiated) {
             try VMInstaller.prepare(
-                settings: settings, iso: iso, virtioISO: virtioISO, variantID: variantID,
+                settings: settings, iso: iso, variantID: variantID,
                 libraryURL: libraryURL, tools: tools, unattendOptions: unattend,
                 ubuntuOptions: ubuntu,
                 progress: { phase in Task { @MainActor in progress(phase) } }).bundle

@@ -207,8 +207,8 @@ struct QemuCommandTests {
         // GuestOS 的取值写进 config.json,不能随便改
         expectEqual(GuestOS(rawValue: "ubuntu"), GuestOS.ubuntu, "GuestOS 的 rawValue 稳定")
         expectEqual(GuestOS(rawValue: "windows"), GuestOS.windows, "GuestOS 的 rawValue 稳定")
-        expect(GuestOS.windows.needsDriverISO, "Windows 要 virtio 驱动盘")
-        expect(!GuestOS.ubuntu.needsDriverISO, "Ubuntu 不要驱动盘")
+        expect(GuestOS.windows.needsVirtioDrivers, "Windows 的工具盘要带 virtio 驱动")
+        expect(!GuestOS.ubuntu.needsVirtioDrivers, "Ubuntu 内核自带 virtio 驱动")
         expect(GuestOS.ubuntu.minDiskGB < GuestOS.windows.minDiskGB, "Ubuntu 装得下的盘更小")
         // 驱动 ISO 只有 Windows 有,所以这个字段是可选的
         var media = InstallMedia(iso: "/i.iso", boot: "/b.img", tools: "/b.img", virtioISO: nil)

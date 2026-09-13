@@ -12,13 +12,6 @@ import Foundation
 
 public enum VMInstaller {
 
-    /// virtio-win ISO 的默认位置。找不到就得让用户自己选,**不能静默跳过**:
-    /// 没有它装出来的机器没有显卡驱动(黑屏)、没有网卡、没有 vioserial(agent 永远连不上)。
-    public static var defaultVirtioISO: URL? {
-        let url = URL(fileURLWithPath: NSHomeDirectory() + "/Downloads/virtio-win.iso")
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
-    }
-
     public enum Phase {
         case inspecting
         case creatingBundle
@@ -63,11 +56,10 @@ public enum VMInstaller {
     /// 建包并构建安装介质。同步阻塞,调用方负责挑队列。
     ///
     /// 两个系统的介质不一样:
-    ///   Windows:boot.img(1.5GB,ISO 的引导文件 + 应答文件)+ tools.img(agent)+ virtio-win ISO
+    ///   Windows:boot.img(1.5GB,ISO 的引导文件 + 应答文件)+ tools.img(agent 与 virtio 驱动)
     ///   Ubuntu :一张 CIDATA 盘(EFI 引导链 + grub.cfg + cloud-init 的 user-data),几 MB
     public static func prepare(settings: VMSettings,
                         iso: URL,
-                        virtioISO: URL?,
                         variantID: String,
                         libraryURL: URL,
                         tools: ToolPaths,
@@ -77,10 +69,10 @@ public enum VMInstaller {
                         onBundleCreated: ((VMBundle) -> Void)? = nil) throws -> (bundle: VMBundle, media: InstallMedia) {
 
         let os = settings.os
-        if os.needsDriverISO {
-            guard let virtioISO, FileManager.default.fileExists(atPath: virtioISO.path) else {
-                throw InstallError.notWindowsISO("找不到 virtio-win 驱动镜像")
-            }
+        // 没有 virtio 驱动装出来的 Windows 黑屏、没网、agent 永远连不上 —— 不能静默跳过
+        if os.needsVirtioDrivers,
+           !FileManager.default.fileExists(atPath: tools.virtioDrivers.appendingPathComponent("vioserial").path) {
+            throw InstallError.imageBuildFailed("应用不完整:缺少 virtio 驱动")
         }
         progress(.creatingBundle)
         try? FileManager.default.createDirectory(at: libraryURL, withIntermediateDirectories: true)
@@ -95,7 +87,7 @@ public enum VMInstaller {
         do {
             switch os {
             case .windows:
-                media = try prepareWindows(bundle: bundle, iso: iso, virtioISO: virtioISO!,
+                media = try prepareWindows(bundle: bundle, iso: iso,
                                            variantID: variantID, tools: tools,
                                            unattendOptions: unattendOptions,
                                            bootImage: bootImage, progress: progress)
@@ -117,7 +109,7 @@ public enum VMInstaller {
         return (bundle, media)
     }
 
-    private static func prepareWindows(bundle: VMBundle, iso: URL, virtioISO: URL,
+    private static func prepareWindows(bundle: VMBundle, iso: URL,
                                        variantID: String, tools: ToolPaths,
                                        unattendOptions: UnattendOptions,
                                        bootImage: URL,
@@ -143,10 +135,10 @@ public enum VMInstaller {
         try SupportImageBuilder.build(
             at: toolsImage, autounattend: unattend,
             agentScript: tools.windowsAgentScript,
-            installScript: SupportImageBuilder.installScript)
+            installScript: SupportImageBuilder.installScript,
+            drivers: tools.virtioDrivers)
 
-        return InstallMedia(iso: iso.path, boot: bootImage.path,
-                            tools: toolsImage.path, virtioISO: virtioISO.path)
+        return InstallMedia(iso: iso.path, boot: bootImage.path, tools: toolsImage.path)
     }
 
     /// Ubuntu 只要一张盘。**引导文件不用复制**:grub 直接从 ISO 上取内核,

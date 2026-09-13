@@ -16,7 +16,7 @@ let usage = """
   list                                   列出虚拟机
   create <名称> [--os windows|ubuntu] [--cpus N] [--memory MB] [--disk GB]
          [--network none|user] [--from-disk <镜像>]
-  install <名称> --iso <ISO> [--os windows|ubuntu] [--variant <id>] [--virtio-iso <ISO>]
+  install <名称> --iso <ISO> [--os windows|ubuntu] [--variant <id>]
          [--username <用户名>] [--password <密码>] [--cpus N] [--memory MB] [--disk GB]
          [--no-run]                      只准备安装介质，不启动虚拟机
   resize-disk <名称> <GB>                扩大系统盘（需关机且未挂起），下次启动时自动扩展系统分区

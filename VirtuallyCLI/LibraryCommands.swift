@@ -69,21 +69,10 @@ enum LibraryCommands {
         if let u = args.option("username") { unattend.username = u; ubuntu.username = u }
         if let p = args.option("password") { unattend.password = p; ubuntu.password = p }
 
-        var virtio: URL? = nil
-        let virtioArg = args.option("virtio-iso").map { URL(fileURLWithPath: $0) }
-        if os.needsDriverISO {
-            guard let found = virtioArg ?? VMInstaller.defaultVirtioISO else {
-                throw CLIError("""
-                    需要 virtio-win 驱动镜像：放在 ~/Downloads/virtio-win.iso，或用 --virtio-iso <路径> 指定。
-                    缺少它时，安装后的 Windows 没有显卡和网络驱动。
-                    """)
-            }
-            virtio = found
-        }
         let noRun = args.flag("no-run")
 
         let (bundle, _) = try VMInstaller.prepare(
-            settings: settings, iso: iso, virtioISO: virtio, variantID: chosen.id,
+            settings: settings, iso: iso, variantID: chosen.id,
             libraryURL: library, tools: tools, unattendOptions: unattend, ubuntuOptions: ubuntu,
             progress: { phase in if phase != .creatingBundle { print(phase.message) } },
             onBundleCreated: { print("已创建：\($0.url.path)") })
@@ -135,7 +124,8 @@ enum LibraryCommands {
             at: out,
             autounattend: UnattendGenerator.generate(UnattendOptions(editionIndex: 3)),
             agentScript: tools.windowsAgentScript,
-            installScript: SupportImageBuilder.installScript)
+            installScript: SupportImageBuilder.installScript,
+            drivers: tools.virtioDrivers)
         print("已生成工具盘：\(out.path)")
     }
 

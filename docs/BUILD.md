@@ -21,10 +21,13 @@ QEMU 不进 git,先在本机编出来(约 10 分钟,不装 Homebrew,依赖全部
 
 ```
 ThirdParty/qemu/build-deps.sh     # pkgconf、glib、pixman、libusb
-ThirdParty/qemu/build.sh          # QEMU,只打 patches/0001(-display macos 后端)
+ThirdParty/qemu/build.sh          # QEMU,打上 patches/ 下的补丁
+ThirdParty/virtio-win/fetch.sh    # Windows 客户机的 virtio 驱动(下载 837MB 的官方 ISO,抽出约 4MB)
 ```
 
-源码包放在 `ThirdParty/qemu/src/`,已经在的就不再下载。
+源码包放在 `ThirdParty/qemu/src/`,virtio-win ISO 放在 `ThirdParty/virtio-win/src/`,已经在的就不再下载。
+virtio 驱动是 Windows 内核驱动,要 WDK 编译加微软签名,macOS 上做不了,所以用官方发布的已签名二进制,
+版本与 SHA256 固定在 `fetch.sh` 里。
 
 **SDK 必须与部署目标同代**:`env.sh` 固定用 macOS 26 的 SDK 编第三方库。
 用更新的 SDK 编出来的 glib 会调用本机不存在的 `pipe2`,QEMU 一启动就崩。
@@ -56,7 +59,7 @@ app 的「Embed QEMU」构建阶段把 QEMU、它的 dylib、固件嵌进 `Virtu
 ```
 Scripts/ctl.sh list
 Scripts/ctl.sh install Ubuntu --os ubuntu --iso ~/Downloads/ubuntu-26.04.1-desktop-arm64.iso
-Scripts/ctl.sh install "Windows 11" --iso ~/Downloads/Win11_Arm64.iso   # 默认找 ~/Downloads/virtio-win.iso
+Scripts/ctl.sh install "Windows 11" --iso ~/Downloads/Win11_Arm64.iso
 Scripts/ctl.sh run --vm "$HOME/Library/Application Support/Virtually/VMs/Ubuntu.vmbundle"
 Scripts/ctl.sh send state
 Scripts/ctl.sh shot /tmp/screen.png

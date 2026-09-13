@@ -17,8 +17,17 @@
 | [SNAPSHOTS.md](docs/SNAPSHOTS.md) | 快照 |
 | [USB.md](docs/USB.md) | USB 透传 |
 | [TRANSFER.md](docs/TRANSFER.md) | 传文件与剪贴板 |
+| [DISK.md](docs/DISK.md) | 扩大系统盘 |
+| [DISPLAY.md](docs/DISPLAY.md) | 显示分辨率上限 |
 | [PENDING-VERIFICATION.md](docs/PENDING-VERIFICATION.md) | 待人工验证的项 |
 
 ## 许可证
 
 GNU 通用公共许可证第 2 版或(由你选择)任何更新的版本(GPL-2.0-or-later),全文见 [LICENSE](LICENSE)。
+
+### 随 app 分发的第三方组件
+
+- **QEMU**:GPL-2.0,源码按 `ThirdParty/qemu/build.sh` 构建,本项目的改动在 `ThirdParty/qemu/patches/`
+- **virtio-win 驱动**(Windows 客户机用,0.1.302,Red Hat 等):BSD-3-Clause,官方已签名的二进制,
+  许可证文本随 app 分发(`Virtually.app/Contents/Resources/VirtioDrivers/virtio-win_license.txt`),
+  获取方式见 `ThirdParty/virtio-win/fetch.sh`
