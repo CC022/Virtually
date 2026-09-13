@@ -1,7 +1,7 @@
 // virtually —— Virtually 的命令行工具,与 app 共用 VirtuallyKit。
 //
 // 两类命令:
-//   离线的,直接操作资源库:list / create / install / inspect-iso / build-tools
+//   离线的,直接操作资源库:list / create / install / resize-disk / inspect-iso / build-tools
 //   驱动 app 的:run / send / log / stop / shot
 //     run 以调试模式拉起 Virtually.app 并打开一台虚拟机,app 的输出写进日志;
 //     send 把命令经 Unix socket 送进 app(命令集见 app 的 ControlServer),再把这段时间的新日志打出来。
@@ -19,6 +19,7 @@ let usage = """
   install <名字> --iso <ISO> [--os windows|ubuntu] [--variant <id>] [--virtio-iso <ISO>]
          [--username <用户>] [--password <密码>] [--cpus N] [--memory MB] [--disk GB]
          [--no-run]                      准备好介质后默认用 run 开机开始安装
+  resize-disk <名字> <GB>                扩大系统盘(关机且未挂起时);下次开机 guest 分区自动跟着扩
   inspect-iso <ISO>                      识别系统并列出可装的变体
   build-tools [<输出>]                   重建 Windows 工具盘(默认在 Application Support)
 
@@ -45,6 +46,7 @@ do {
     case "list":        try LibraryCommands.list(&args)
     case "create":      try LibraryCommands.create(&args)
     case "install":     try LibraryCommands.install(&args)
+    case "resize-disk": try LibraryCommands.resizeDisk(&args)
     case "inspect-iso": try LibraryCommands.inspectISO(&args)
     case "build-tools": try LibraryCommands.buildTools(&args)
     case "run":         try AppControl.run(&args)

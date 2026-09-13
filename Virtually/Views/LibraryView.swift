@@ -101,6 +101,7 @@ struct LibraryView: View {
 // MARK: - 设置
 
 /// 关机态才能改。改了核数或内存,挂起状态与已有快照都会对不上(指纹变了),这里直说。
+/// 磁盘更严:挂起时也不能改(恢复挂起状态会把盘缩回去,见 DiskResize.swift),而且只能扩大。
 private struct VMSettingsSheet: View {
     let ref: VMRef
     @Environment(AppState.self) private var app
@@ -112,7 +113,16 @@ private struct VMSettingsSheet: View {
     @State private var audio = true
     @State private var network = NetworkMode.none
     @State private var original: VMSettings?
+    /// 系统盘现在的大小,读 qcow2 得来(不信配置里的 diskSizeGB)。nil 表示还没读到
+    @State private var currentDiskGB: Int?
+    @State private var diskGB = 0
+    /// 打开时从包里看出来的不能改的原因:安装中、已挂起、读不到大小。正在运行另算,见 diskBlocked
+    @State private var diskBlockedByBundle: String?
+    @State private var saving = false
     @State private var failure: String?
+
+    /// qcow2 是稀疏的,上限只是防手滑
+    private static let maxDiskGB = 1024
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -122,6 +132,16 @@ private struct VMSettingsSheet: View {
                 Stepper("CPU  \(cpus) 核", value: $cpus, in: 1...VMSettings.hostCPUCount)
                 Stepper("内存  \(memoryGB) GB", value: $memoryGB,
                         in: 2...max(2, VMSettings.maxMemoryMB / 1024))
+                VStack(alignment: .leading, spacing: 4) {
+                    let current = currentDiskGB ?? 0
+                    // 下限是现在的大小:只能扩大,缩小会切掉 guest 的分区
+                    Stepper(currentDiskGB == nil ? "磁盘" : "磁盘  \(diskGB) GB", value: $diskGB,
+                            in: current...max(current, Self.maxDiskGB), step: 16)
+                        .disabled(diskBlocked != nil || currentDiskGB == nil)
+                    if let why = diskBlocked {
+                        Text(why).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Toggle("声卡", isOn: $audio)
                 Picker("网络", selection: $network) {
                     ForEach(NetworkMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -134,14 +154,20 @@ private struct VMSettingsSheet: View {
                       systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
+            if let current = currentDiskGB, diskGB > current {
+                Label("磁盘只能扩大。下次开机后会自动把系统分区扩到占满;恢复扩容前存的快照,磁盘会回到当时的大小。",
+                      systemImage: "info.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if let failure {
                 Text(failure).font(.caption).foregroundStyle(.red)
             }
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }
+                if saving { ProgressView().controlSize(.small) }
+                Button("取消") { dismiss() }.disabled(saving)
                 Button("保存") { save() }.buttonStyle(.borderedProminent)
-                    .disabled(original == nil)
+                    .disabled(original == nil || saving)
             }
         }
         .padding(20)
@@ -154,7 +180,21 @@ private struct VMSettingsSheet: View {
             memoryGB = b.settings.memoryMB / 1024
             audio = b.settings.audioEnabled
             network = b.settings.network
+            diskBlockedByBundle = b.diskResizeBlockedReason
+            do {
+                let gb = VMBundle.wholeGB(try await app.diskSize(ref))
+                diskGB = gb            // 先给值再给下限,Stepper 不会看到越界的中间态
+                currentDiskGB = gb
+            } catch {
+                diskBlockedByBundle = "读不到磁盘大小:\(error.localizedDescription)"
+            }
         }
+    }
+
+    /// 面板开着的时候虚拟机也可能被开起来(命令行、恢复的窗口),所以运行态实时看
+    private var diskBlocked: String? {
+        if app.runningPaths.contains(ref.path) { return "虚拟机正在运行,关机后才能改磁盘大小" }
+        return diskBlockedByBundle
     }
 
     private var shapeChanges: Bool {
@@ -169,11 +209,21 @@ private struct VMSettingsSheet: View {
         s.memoryMB = memoryGB * 1024
         s.audioEnabled = audio
         s.network = network
-        do {
-            _ = try app.updateSettings(ref, s)
-            dismiss()
-        } catch {
-            failure = error.localizedDescription
+        saving = true
+        failure = nil
+        Task {
+            defer { saving = false }
+            do {
+                // 先扩盘:失败就停在面板上,别的设置一项都不动
+                if let current = currentDiskGB, diskGB > current {
+                    try await app.resizeDisk(ref, toGB: diskGB)
+                    currentDiskGB = diskGB     // 下面要是失败了再点保存,不会再扩一次
+                }
+                _ = try app.updateSettings(ref, s)
+                dismiss()
+            } catch {
+                failure = error.localizedDescription
+            }
         }
     }
 }

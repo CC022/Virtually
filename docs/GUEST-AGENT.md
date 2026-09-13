@@ -267,6 +267,9 @@ guest → 宿主 :  ok ... | err ... | res <w> <h> <hz> | mode <w> <h> <hz>
                  pong | out <一行输出> | cursor <形状名> <是否可见> | clip <base64>
 ```
 
+扩大系统盘之后,宿主借 `exec` 让 guest 扩分区,回一行 `out VAGROW …`(见 DISK.md)。
+**协议没有为此加命令**:已经装好的机器拿不到新 agent,而 `exec` 两份实现早就都有。
+
 `setres` 返回 `err setres rc=-2` 表示 `DISP_CHANGE_BADMODE`,即驱动没有暴露该模式。
 **已验证**:驱动确实只接受固定模式表,故宿主侧做吸附(见坑 15)。
 

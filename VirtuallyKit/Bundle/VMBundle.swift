@@ -130,6 +130,8 @@ public struct VMSettings: Codable, Equatable {
     public var name: String
     public var cpuCount: Int
     public var memoryMB: Int
+    /// 创建时(或最后一次扩容时)给的大小。**实际大小以 qcow2 的 virtual-size 为准**:
+    /// 恢复扩容前存的快照,QEMU 会把盘一起改回当时的大小(见 docs/DISK.md)。
     public var diskSizeGB: Int
     public var network: NetworkMode
     public var audioEnabled: Bool
@@ -157,6 +159,11 @@ public struct VMSettings: Codable, Equatable {
 
     /// 客户机系统
     public var os: GuestOS
+
+    /// true 表示虚拟盘扩过容,guest 里的系统分区还没跟上。agent 上线后宿主让它扩到占满,扩完清掉。
+    /// **必须是 Optional**:旧的 config.json 里没有这个键,非 Optional 会解码失败,
+    /// 而 loadLibrary 静默跳过解码失败的包 —— 虚拟机就从资源库里消失了。
+    public var growPartition: Bool?
 
     /// 新建虚拟机的默认设置。磁盘默认给最小值的三倍上下,够装完还有余量。
     public static func `default`(for os: GuestOS) -> VMSettings {
@@ -215,7 +222,7 @@ public struct VMSettings: Codable, Equatable {
         return adjusted
     }
 
-    public init(name: String, cpuCount: Int, memoryMB: Int, diskSizeGB: Int, network: NetworkMode, audioEnabled: Bool, displayWidth: Int, displayHeight: Int, diskDriver: DiskDriver, snapshotShapes: [String: String], install: InstallMedia? = nil, os: GuestOS) {
+    public init(name: String, cpuCount: Int, memoryMB: Int, diskSizeGB: Int, network: NetworkMode, audioEnabled: Bool, displayWidth: Int, displayHeight: Int, diskDriver: DiskDriver, snapshotShapes: [String: String], install: InstallMedia? = nil, os: GuestOS, growPartition: Bool? = nil) {
         self.name = name
         self.cpuCount = cpuCount
         self.memoryMB = memoryMB
@@ -228,6 +235,7 @@ public struct VMSettings: Codable, Equatable {
         self.snapshotShapes = snapshotShapes
         self.install = install
         self.os = os
+        self.growPartition = growPartition
     }
 }
 
@@ -377,12 +385,14 @@ public enum VMError: LocalizedError {
     case alreadyExists(String)
     case toolFailed(String, String)
     case busy(String)
+    case invalid(String)
 
     public var errorDescription: String? {
         switch self {
         case .alreadyExists(let name): return "\(name) 已存在"
         case .toolFailed(let tool, let out): return "\(tool) 执行失败:\n\(out)"
         case .busy(let why): return why
+        case .invalid(let why): return why
         }
     }
 }

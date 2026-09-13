@@ -91,5 +91,5 @@ Scripts/ctl.sh stop              # 先挂起再退出
 - 引擎是 QEMU + Hypervisor.framework,**不要建议换成 Virtualization.framework**:实测 VZ 引导不了 Windows。
 - 鼠标跟手是首要体验指标。显示/输入路径的改动先确认没有增加延迟、拷贝或编解码环节。
 - 不装 Homebrew。第三方依赖源码构建进 `ThirdParty/qemu/sysroot`;需要下载任何东西先说明名称、版本、来源、用途。
-- `docs/` 下每篇记的是实测结论和踩过的坑(GUEST-AGENT、LIFECYCLE、SNAPSHOTS、USB、TRANSFER、LINUX、INSTALL-WIZARD)。
+- `docs/` 下每篇记的是实测结论和踩过的坑(GUEST-AGENT、LIFECYCLE、SNAPSHOTS、USB、TRANSFER、LINUX、INSTALL-WIZARD、DISK)。
   改某个子系统前先读对应那篇,很多看似可以简化的写法是被实测否掉的。需要人肉眼确认的项记在 `docs/PENDING-VERIFICATION.md`。

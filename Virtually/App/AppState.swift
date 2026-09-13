@@ -306,10 +306,32 @@ final class AppState {
             url = dest
             bundle = VMBundle(url: dest, settings: bundle.settings)
         }
+        // 磁盘两项由 resizeDisk 写。面板手里是打开时的旧副本,先扩容再保存的话会把刚写的标记盖掉
+        settings.diskSizeGB = bundle.settings.diskSizeGB
+        settings.growPartition = bundle.settings.growPartition
         bundle.settings = settings
         try bundle.save()
         refreshLibrary()
         return VMRef(path: url.path)
+    }
+
+    /// 系统盘现在的虚拟大小(字节)。要调 qemu-img,放后台线程。
+    func diskSize(_ ref: VMRef) async throws -> Int64 {
+        let qemuImg = tools.qemuImg
+        return try await Task.detached(priority: .userInitiated) {
+            try VMBundle.load(at: ref.url).diskVirtualSize(qemuImg: qemuImg)
+        }.value
+    }
+
+    /// 扩大系统盘。只在关机态;下次开机 agent 上线后 guest 里的分区会跟着扩。
+    func resizeDisk(_ ref: VMRef, toGB gb: Int) async throws {
+        guard sessions[ref.path] == nil else { throw VMError.busy("虚拟机正在运行,关机后才能改磁盘大小") }
+        let qemuImg = tools.qemuImg
+        try await Task.detached(priority: .userInitiated) {
+            var bundle = try VMBundle.load(at: ref.url)
+            try bundle.growDisk(toGB: gb, qemuImg: qemuImg)
+        }.value
+        refreshLibrary()
     }
 
     /// 整个包移到废纸篓 —— 几十 GB 的盘,误删了还能捞回来。

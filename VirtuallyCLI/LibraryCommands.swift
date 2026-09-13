@@ -97,6 +97,18 @@ enum LibraryCommands {
         try AppControl.run(&runArgs)
     }
 
+    /// 扩大系统盘。与设置面板同一条路径:关机态、没挂起、装完了才行,只增不减。
+    static func resizeDisk(_ args: inout Arguments) throws {
+        let tools = try AppLocator.tools(&args)
+        let library = libraryURL(&args)
+        let name = try args.required("名字")
+        guard let gb = Int(try args.required("GB")) else { throw CLIError("大小要一个整数(GB)") }
+        var bundle = try VMBundle.load(at: library.appendingPathComponent("\(name).\(VMBundle.fileExtension)"))
+        let before = VMBundle.wholeGB(try bundle.diskVirtualSize(qemuImg: tools.qemuImg))
+        try bundle.growDisk(toGB: gb, qemuImg: tools.qemuImg)
+        print("磁盘已从 \(before) GB 扩到 \(gb) GB。下次开机 agent 上线后,guest 里的系统分区会自动扩到占满。")
+    }
+
     static func inspectISO(_ args: inout Arguments) throws {
         let iso = URL(fileURLWithPath: try args.required("ISO 路径"))
         guard let os = ISOInspector.detect(iso) else { throw CLIError("认不出这张镜像是哪个系统") }

@@ -127,6 +127,8 @@ public final class VMSession {
     @ObservationIgnored private var launchedAt = Date()
     /// 安装期首次重启弹出介质,只做一次
     @ObservationIgnored private var installEjectPending = false
+    /// 这次会话已经让 guest 扩过分区了(见 DiskResize.swift)
+    @ObservationIgnored var partitionGrowSent = false
 
     // MARK: 供 UI 观察
 
@@ -866,6 +868,10 @@ public final class VMSession {
             return
         }
         if line.hasPrefix("ok setres") { pendingResolution = .zero }
+        if let outcome = PartitionGrow.parse(line) {
+            partitionGrowReported(outcome)
+            return
+        }
         if f.count >= 2, f[0] == "cursor" {
             view.setHostCursor(name: String(f[1]), showing: f.count < 3 || f[2] != "0")
             cursorSummary = view.cursorStatus
@@ -883,6 +889,7 @@ public final class VMSession {
             resyncGuestClock()
         }
         finishInstallIfNeeded()
+        growPartitionIfNeeded()
         installerStatus = nil      // agent 上线就说明装完了,进度条该撤了
         startClipboardSync()
         guard hostCursorEnabled else { return }
