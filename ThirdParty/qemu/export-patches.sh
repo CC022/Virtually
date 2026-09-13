@@ -21,12 +21,14 @@ OUT="$ROOT/patches"
 [ -f "$TARBALL" ] || { echo "没有原始 tarball $TARBALL"; exit 1; }
 
 # 补丁顺序即应用顺序
-GROUPS_ORDER="0001-macos-display-backend"
+GROUPS_ORDER="0001-macos-display-backend 0002-hvf-pmu-migration"
 
 group_files() {
   case "$1" in
     # app 真正依赖的:-display macos 后端。共享 mmap 帧缓冲 + Unix socket 事件通道。
     0001-macos-display-backend)      echo "ui/macos.c ui/meson.build qapi/ui.json" ;;
+    # hvf 下 PMU 状态不进快照,Windows 从挂起恢复后关不了机。见 machine.c 里 vmstate_pmu_hvf 的注释。
+    0002-hvf-pmu-migration)          echo "target/arm/machine.c" ;;
     *) echo "" ;;
   esac
 }

@@ -1,0 +1,61 @@
+--- a/target/arm/machine.c	2025-05-28 15:05:46
++++ b/target/arm/machine.c	2026-09-13 00:10:42
+@@ -2,6 +2,7 @@
+ #include "cpu.h"
+ #include "qemu/error-report.h"
+ #include "system/kvm.h"
++#include "system/hvf.h"
+ #include "system/tcg.h"
+ #include "kvm_arm.h"
+ #include "internals.h"
+@@ -377,7 +378,42 @@
+         VMSTATE_END_OF_LIST()
+     }
+ };
++
++/*
++ * hvf 下 CPU 寄存器的迁移列表只有 hvf_sreg_match 里那些由 Hypervisor.framework 管的寄存器
++ * (见 hvf_arch_init_vcpu),而 PMU 是 hvf.c 自己模拟的,状态只在 env->cp15 里、不在列表中。
++ * 于是 savevm/loadvm 之后 PMU 回到复位值:PMCR.E 为 0,周期计数器冻住不走。
++ * Windows 开机时打开过 PMCCNTR,关机最后一步拿它忙等 —— 计数器不走就永远等下去,
++ * 电源关不掉,QEMU 不退出,4 个 vCPU 满载(Virtually 实测:挂起再恢复后必现,冷启动正常)。
++ * 这里把 hvf 模拟的那几个 PMU 寄存器补进迁移流。c15_ccnt 在 cpu_pre_save 的 pmu_op_start
++ * 里已刷新成当前值,加载后 cpu_post_load 的 pmu_op_finish 会据此重算 delta。
++ * 旧快照没有这个子段,加载时直接跳过,不会失败。
++ */
++static bool pmu_hvf_needed(void *opaque)
++{
++    ARMCPU *cpu = opaque;
+ 
++    return hvf_enabled() && arm_feature(&cpu->env, ARM_FEATURE_PMU);
++}
++
++static const VMStateDescription vmstate_pmu_hvf = {
++    .name = "cpu/pmu-hvf",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .needed = pmu_hvf_needed,
++    .fields = (const VMStateField[]) {
++        VMSTATE_UINT64(env.cp15.c9_pmcr, ARMCPU),
++        VMSTATE_UINT64(env.cp15.c9_pmcnten, ARMCPU),
++        VMSTATE_UINT64(env.cp15.c9_pmovsr, ARMCPU),
++        VMSTATE_UINT64(env.cp15.c9_pmuserenr, ARMCPU),
++        VMSTATE_UINT64(env.cp15.c9_pmselr, ARMCPU),
++        VMSTATE_UINT64(env.cp15.c9_pminten, ARMCPU),
++        VMSTATE_UINT64(env.cp15.c15_ccnt, ARMCPU),
++        VMSTATE_UINT64(env.cp15.pmccfiltr_el0, ARMCPU),
++        VMSTATE_END_OF_LIST()
++    }
++};
++
+ static bool m_needed(void *opaque)
+ {
+     ARMCPU *cpu = opaque;
+@@ -1108,6 +1144,7 @@
+         &vmstate_serror,
+         &vmstate_irq_line_state,
+         &vmstate_wfxt_timer,
++        &vmstate_pmu_hvf,
+         NULL
+     }
+ };
