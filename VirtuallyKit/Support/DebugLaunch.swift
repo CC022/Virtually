@@ -64,6 +64,10 @@ public struct DebugLaunch: Equatable, Sendable {
         add(Key.extraISO, extraISO)
         add(Key.bootImage, bootImage)
         add(Key.displaySize, displaySize)
+        // 调试实例不读也不写系统保存的窗口状态。上次调试退出时开着的虚拟机窗口若指向已删掉的包,
+        // 恢复时 SwiftUI 连资源库都不建,-VMPath 指定的那台就永远打不开(实测:app 活着、一个窗口都没有)。
+        // 也免得调试实例的窗口状态混进正常启动。
+        if vmPath != nil { a += ["-ApplePersistenceIgnoreState", "YES"] }
         return a
     }
 

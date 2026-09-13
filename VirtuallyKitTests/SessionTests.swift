@@ -136,6 +136,8 @@ struct SessionTests {
                "偶数位是键,奇数位是值")
         expectEqual(value(after: "-MountTools", in: a), "YES", "布尔开关写成 YES")
         expect(!a.contains("-ForceRamfb"), "没开的开关不出现")
+        expectEqual(value(after: "-ApplePersistenceIgnoreState", in: a), "YES",
+                    "调试实例不恢复窗口:旧窗口指向删掉的包时,SwiftUI 会一个窗口都不建")
         expectEqual(d.sessionOptions.displaySize?.w, 1280, "显示尺寸解析")
         expect(d.sessionOptions.mountTools, "工具盘开关传到会话选项")
         expect(d.sessionOptions.hostCursor, "默认宿主画光标")
