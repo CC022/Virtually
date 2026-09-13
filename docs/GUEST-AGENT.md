@@ -268,6 +268,7 @@ guest → 宿主 :  ok ... | err ... | res <w> <h> <hz> | mode <w> <h> <hz>
 ```
 
 扩大系统盘之后,宿主借 `exec` 让 guest 扩分区,回一行 `out VAGROW …`(见 DISK.md)。
+Windows 上 agent 每次上线,宿主也借 `exec` 检查 viogpudo 的帧缓冲预留,回 `out VADISP …`(见 DISPLAY.md)。
 **协议没有为此加命令**:已经装好的机器拿不到新 agent,而 `exec` 两份实现早就都有。
 
 `setres` 返回 `err setres rc=-2` 表示 `DISP_CHANGE_BADMODE`,即驱动没有暴露该模式。

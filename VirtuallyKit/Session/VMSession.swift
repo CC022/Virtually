@@ -129,6 +129,8 @@ public final class VMSession {
     @ObservationIgnored private var installEjectPending = false
     /// 这次会话已经让 guest 扩过分区了(见 DiskResize.swift)
     @ObservationIgnored var partitionGrowSent = false
+    /// 这次会话已经查过 Windows 的帧缓冲预留了(见 DisplayMemory.swift)
+    @ObservationIgnored var displayMemoryChecked = false
 
     // MARK: 供 UI 观察
 
@@ -163,6 +165,11 @@ public final class VMSession {
     @ObservationIgnored private var resizeTask: Task<Void, Never>?
     @ObservationIgnored private var pendingResolution = CGSize.zero
     @ObservationIgnored private var resolutionAttempt = 0
+    /// 这次会话里 guest 实际撑得住的总像素。先按 5K 算;超过旧上限的请求被驱动拒了,
+    /// 说明这台 Windows 的帧缓冲段还是旧的(注册表没写或还没重启),退回旧上限。
+    @ObservationIgnored private var pixelBudget = VMDisplay.maxPixels
+    /// 退回旧上限时先切到模式表里的一档,切成功之后再请求这个尺寸(见 handleResolutionFailure)
+    @ObservationIgnored private var resolutionAfterSnap: CGSize?
 
     // MARK: 光标
 
@@ -867,9 +874,19 @@ public final class VMSession {
             print("[剪贴板] guest 的 agent 版本太老,不支持剪贴板同步(virtually build-tools 重建工具盘,再 run --tools 开一次机可更新)")
             return
         }
-        if line.hasPrefix("ok setres") { pendingResolution = .zero }
+        if line.hasPrefix("ok setres") {
+            pendingResolution = .zero
+            if let px = resolutionAfterSnap {
+                resolutionAfterSnap = nil
+                requestResolution(px)
+            }
+        }
         if let outcome = PartitionGrow.parse(line) {
             partitionGrowReported(outcome)
+            return
+        }
+        if let outcome = DisplayMemory.parse(line) {
+            displayMemoryReported(outcome)
             return
         }
         if f.count >= 2, f[0] == "cursor" {
@@ -890,6 +907,7 @@ public final class VMSession {
         }
         finishInstallIfNeeded()
         growPartitionIfNeeded()
+        reserveDisplayMemoryIfNeeded()
         installerStatus = nil      // agent 上线就说明装完了,进度条该撤了
         startClipboardSync()
         guard hostCursorEnabled else { return }
@@ -1138,6 +1156,22 @@ public final class VMSession {
         guard pendingResolution != .zero else { return }
         if resolutionAttempt == 0 {
             requestResolution(pendingResolution, attempt: 1)
+        } else if pendingResolution.width * pendingResolution.height > VMDisplay.legacyMaxPixels,
+                  pixelBudget > VMDisplay.legacyMaxPixels {
+            // 超过旧上限的尺寸被拒:帧缓冲段还是按 5120x2160 分的(注册表没写或还没重启)。
+            // 最终要的是旧上限内等比缩小的尺寸,别停在模式表那一档 —— 长宽比不对,画面会变形。
+            // 但**不能直接请求**:被拒之后 Windows 要先成功切一次模式,紧接着的自定义尺寸才会被接受
+            // (实测直接请求连续两次 rc=-2)。所以先切到模式表里预算内的一档,成功后再请求它。
+            pixelBudget = VMDisplay.legacyMaxPixels
+            let px = VMDisplay.clamp(pendingResolution, maxPixels: pixelBudget)
+            let m = agent.snap(width: Int(pendingResolution.width), height: Int(pendingResolution.height),
+                               maxPixels: Int(pixelBudget))
+            print("[ui] \(Int(pendingResolution.width))x\(Int(pendingResolution.height)) 超出这台 guest 当前的显存预算,"
+                  + "先切到 \(m.w)x\(m.h),再改用 \(Int(px.width))x\(Int(px.height))(重启 Windows 后可以更大)")
+            pendingResolution = .zero
+            resolutionAfterSnap = px
+            lastRequestedSize = px
+            agent.send("setres \(m.w) \(m.h)")
         } else {
             let m = agent.snap(width: Int(pendingResolution.width),
                                height: Int(pendingResolution.height))
@@ -1154,7 +1188,7 @@ public final class VMSession {
         // ramfb(安装期、ForceRamfb)没有 ui_info,QEMU 侧收到这条会 assert 直接 abort。
         // 画面只按窗口缩放,不请求改分辨率。
         guard displaySupportsUIInfo, guestReady, !suppressResizeRequest else { return }
-        let px = VMDisplay.clamp(raw)
+        let px = VMDisplay.clamp(raw, maxPixels: pixelBudget)
         guard px != lastRequestedSize, px != guestSize else { return }
         lastRequestedSize = px
 
@@ -1173,7 +1207,7 @@ public final class VMSession {
     /// 那一次 RESIZE 回波即可。
     public func setResolutionManually(_ px: CGSize) {
         suppressResizeRequest = true
-        requestResolution(VMDisplay.clamp(px))
+        requestResolution(VMDisplay.clamp(px, maxPixels: pixelBudget))
         Task {
             try? await Task.sleep(for: .seconds(2))
             suppressResizeRequest = false

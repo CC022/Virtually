@@ -1,0 +1,17 @@
+--- a/hw/display/virtio-gpu-base.c	2025-05-28 15:05:46
++++ b/hw/display/virtio-gpu-base.c	2026-09-13 01:12:19
+@@ -198,7 +198,13 @@
+         virtio_add_queue(vdev, 256, ctrl_cb);
+         virtio_add_queue(vdev, 16, cursor_cb);
+     } else {
+-        virtio_add_queue(vdev, 64, ctrl_cb);
++        /*
++         * 2D 模式原本是 64。Windows 的 viogpudo 给帧缓冲挂内存(RESOURCE_ATTACH_BACKING)时
++         * 每页一个条目、每 4K 条目占一个描述符,而且不用间接描述符 —— 5120x2880 要 59 个,
++         * 64 的队列里只要还有几条命令没回来就塞不进去,驱动不重试,画面没有后备存储。
++         * vring.num 随迁移流保存,旧快照恢复后仍是 64,冷启动后驱动才用上 256。
++         */
++        virtio_add_queue(vdev, 256, ctrl_cb);
+         virtio_add_queue(vdev, 16, cursor_cb);
+     }
+ 

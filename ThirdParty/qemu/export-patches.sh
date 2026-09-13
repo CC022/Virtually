@@ -21,7 +21,7 @@ OUT="$ROOT/patches"
 [ -f "$TARBALL" ] || { echo "没有原始 tarball $TARBALL"; exit 1; }
 
 # 补丁顺序即应用顺序
-GROUPS_ORDER="0001-macos-display-backend 0002-hvf-pmu-migration"
+GROUPS_ORDER="0001-macos-display-backend 0002-hvf-pmu-migration 0003-virtio-gpu-ctrl-queue"
 
 group_files() {
   case "$1" in
@@ -29,6 +29,8 @@ group_files() {
     0001-macos-display-backend)      echo "ui/macos.c ui/meson.build qapi/ui.json" ;;
     # hvf 下 PMU 状态不进快照,Windows 从挂起恢复后关不了机。见 machine.c 里 vmstate_pmu_hvf 的注释。
     0002-hvf-pmu-migration)          echo "target/arm/machine.c" ;;
+    # 2D virtio-gpu 控制队列 64 → 256。viogpudo 挂 5K 帧缓冲的内存要 59 个描述符,64 塞不下。见 docs/DISPLAY.md。
+    0003-virtio-gpu-ctrl-queue)      echo "hw/display/virtio-gpu-base.c" ;;
     *) echo "" ;;
   esac
 }

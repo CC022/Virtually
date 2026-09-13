@@ -166,8 +166,9 @@ public final class AgentChannel: @unchecked Sendable {
     ///
     /// 优先选**不小于**请求尺寸的最小模式:画面在宿主侧缩小仍然清楚,
     /// 放大则会糊。没有更大的就取面积最大的那个。
-    public func snap(width: Int, height: Int) -> (w: Int, h: Int) {
-        lock.lock(); let modes = supportedModes; lock.unlock()
+    /// `maxPixels` 排除面积超过预算的模式:模式表里可能有驱动其实撑不住的那一档(比如刚被拒的自定义尺寸)。
+    public func snap(width: Int, height: Int, maxPixels: Int = .max) -> (w: Int, h: Int) {
+        lock.lock(); let modes = supportedModes.filter { $0.w * $0.h <= maxPixels }; lock.unlock()
         guard !modes.isEmpty else { return (width, height) }
         let bigEnough = modes.filter { $0.w >= width && $0.h >= height }
         if let best = bigEnough.min(by: { $0.w * $0.h < $1.w * $1.h }) { return best }

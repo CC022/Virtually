@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 import VirtuallyKit
 
@@ -80,11 +81,22 @@ struct InputTests {
         let odd = VMDisplay.clamp(CGSize(width: 1466, height: 942))
         expectEqual(Int(odd.width), 1466, "范围内的任意尺寸原样保留(点对点的前提)")
 
-        // 5K 屏全屏:超过 viogpudo 的总像素上限,应等比缩小而不是改长宽比
-        let big = VMDisplay.clamp(CGSize(width: 5120, height: 2880))
+        // 5K 屏全屏正好在预算之内,点对点原样保留
+        let fiveK = VMDisplay.clamp(CGSize(width: 5120, height: 2880))
+        expectEqual(fiveK, CGSize(width: 5120, height: 2880), "5K 全屏不缩小")
+
+        // 6K 屏全屏:超过预算,应等比缩小而不是改长宽比
+        let big = VMDisplay.clamp(CGSize(width: 6016, height: 3384))
         expect(big.width * big.height <= VMDisplay.maxPixels, "超限时缩到像素预算之内")
-        let srcRatio = 5120.0 / 2880.0, dstRatio = big.width / big.height
+        let srcRatio = 6016.0 / 3384.0, dstRatio = big.width / big.height
         expect(abs(srcRatio - dstRatio) < 0.01, "缩小时保持长宽比")
+        expect(Int(big.width) % 2 == 0 && Int(big.height) % 2 == 0,
+               "缩出来的宽高是偶数:2 倍屏上窗口才能贴合到整数个点")
+
+        // 帧缓冲段还没扩大的 Windows 按旧上限缩(实测 5120x2560 → 4690x2345 这种奇数高曾导致差 1 像素)
+        let legacy = VMDisplay.clamp(CGSize(width: 5120, height: 2560), maxPixels: VMDisplay.legacyMaxPixels)
+        expect(legacy.width * legacy.height <= VMDisplay.legacyMaxPixels, "旧预算之内")
+        expect(Int(legacy.width) % 2 == 0 && Int(legacy.height) % 2 == 0, "旧预算下同样取偶数")
     }
 
     /// 息屏时 QEMU 写的是近乎全黑的一张图,不该覆盖掉上一张好图
@@ -121,5 +133,35 @@ struct InputTests {
         if let desktop = synthetic(colourful) {
             expect(!Framebuffer.looksBlank(desktop), "有内容的画面不判为空白")
         } else { expect(false, "构造彩色测试图") }
+    }
+}
+
+@Suite("Windows 帧缓冲预留")
+struct DisplayMemoryTests {
+
+    @Test("发给 agent 的注册表命令")
+    func agentCommand() throws {
+        let cmd = DisplayMemory.agentCommand
+        expect(!cmd.contains("\n") && cmd.hasPrefix("exec powershell.exe "), "一行、走 exec")
+        expect(!cmd.contains("\"") && cmd.count < 8191, "没有引号、短于 cmd.exe 上限")
+        let b64 = try #require(cmd.split(separator: " ").last.map(String.init))
+        let script = try #require(Data(base64Encoded: b64).flatMap { String(data: $0, encoding: .utf16LittleEndian) })
+        expect(script.contains("PersistentDispMode0Width") && script.contains("PersistentDispMode0Height"),
+               "写的是 viogpudo 启动时读的那两个值")
+        expect(script.contains("-Value \(DisplayMemory.width)") && script.contains("-Value \(DisplayMemory.height)"),
+               "预留尺寸与 DisplayMemory 一致")
+        expect(script.contains("DEVPKEY_Device_Driver"), "设备键从驱动属性里找,不写死 0000")
+        expect(script.unicodeScalars.allSatisfy(\.isASCII), "纯 ASCII(输出经 cmd 按代码页读)")
+        expect(Double(DisplayMemory.width * DisplayMemory.height) == Double(VMDisplay.maxPixels),
+               "宿主的像素上限与 guest 预留的帧缓冲对应")
+    }
+
+    @Test("解析 guest 回的结果")
+    func parse() {
+        expectEqual(DisplayMemory.parse("out VADISP ready"), .ready, "已经够大")
+        expectEqual(DisplayMemory.parse("out VADISP written"), .written, "刚写入")
+        expectEqual(DisplayMemory.parse("out VADISP none"), .noDevice, "没有 virtio 显卡")
+        expectEqual(DisplayMemory.parse("out VADISP failed Access is denied"), .failed("Access is denied"), "失败原因")
+        expect(DisplayMemory.parse("out VAGROW nochange") == nil, "别的标记不认")
     }
 }
