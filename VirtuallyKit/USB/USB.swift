@@ -64,15 +64,15 @@ public enum USBEnumerator {
     /// 按类别给出不同的说明,因为用户能做的事不一样。
     private static let blockedByClass: [(keywords: [String], reason: String)] = [
         (["Keyboard", "Mouse", "Trackpad", "Touch Bar", "键盘", "鼠标"],
-         "HID 类,已被 macOS 内核驱动独占,用户态抢不到"),
+         "键盘、鼠标等输入设备由 macOS 独占使用"),
         (["Headset", "Audio", "Microphone", "Speaker", "音频"],
-         "音频类,已被 macOS 内核驱动独占"),
+         "音频设备由 macOS 独占使用"),
         (["Ethernet", "LAN", "Wi-Fi", "网卡"],
-         "网卡类,已被 macOS 内核驱动独占"),
+         "网络设备由 macOS 独占使用"),
         (["Camera", "FaceTime", "iSight", "摄像"],
-         "摄像头类,已被 macOS 内核驱动独占"),
+         "摄像头由 macOS 独占使用"),
         (["Bluetooth", "Ambient Light", "Display", "Studio Display"],
-         "Mac 内置或显示器自带的设备,不可透传"),
+         "Mac 内置或显示器自带的设备无法连接到虚拟机"),
     ]
 
     /// USB 接口类 → 被 macOS 内核驱动占用的原因。
@@ -83,18 +83,18 @@ public enum USBEnumerator {
     /// 设备名是厂商随便起的,接口类才是协议事实。
     public static func reasonForInterfaceClass(_ cls: Int) -> String? {
         switch cls {
-        case 1:       return "音频类,已被 macOS 内核驱动独占"
+        case 1:       return "音频设备由 macOS 独占使用"
         // 2/10 是 CDC:CDC-ACM 串口(Arduino、ST-Link 的 VCP、大多数调试器)和 CDC 网卡都在这里。
         // macOS 会给它们绑 AppleUSBACM / 网卡驱动,用户态一样抢不到。
         // 别写成「网卡类」—— 用户手里的多半是块调试器,看到「网卡」只会困惑。
-        case 2, 10:   return "串口/网卡类(CDC),已被 macOS 内核驱动独占"
-        case 3:       return "HID 类,已被 macOS 内核驱动独占,用户态抢不到"
-        case 6:       return "图像类(PTP),已被 macOS 内核驱动独占"
-        case 7:       return "打印机类,已被 macOS 内核驱动独占"
-        case 8:       return "大容量存储类,已被 macOS 挂载占用(可先在访达里推出再试)"
-        case 9:       return "集线器,透传没有意义"
-        case 14:      return "视频类(摄像头),已被 macOS 内核驱动独占"
-        case 224:     return "无线控制类(蓝牙),已被 macOS 内核驱动独占"
+        case 2, 10:   return "串口或网络设备由 macOS 独占使用"
+        case 3:       return "键盘、鼠标等输入设备由 macOS 独占使用"
+        case 6:       return "相机设备由 macOS 独占使用"
+        case 7:       return "打印机由 macOS 独占使用"
+        case 8:       return "磁盘已被 macOS 装载，请先在访达中推出"
+        case 9:       return "USB 集线器无法连接到虚拟机"
+        case 14:      return "摄像头由 macOS 独占使用"
+        case 224:     return "蓝牙设备由 macOS 独占使用"
         default:      return nil          // 0xFF 厂商自定义等:通常没有内核驱动匹配
         }
     }
@@ -104,7 +104,7 @@ public enum USBEnumerator {
     /// 优先用接口类;拿不到接口类时(复合设备的某些形态)才退回名字匹配。
     public static func blockedReason(name: String, deviceClass: Int?,
                               interfaceClasses: [Int] = []) -> String? {
-        if deviceClass == hubDeviceClass { return "集线器,透传没有意义" }
+        if deviceClass == hubDeviceClass { return "USB 集线器无法连接到虚拟机" }
         for cls in interfaceClasses {
             if let r = reasonForInterfaceClass(cls) { return r }
         }

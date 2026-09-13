@@ -35,7 +35,7 @@ public final class QMPClient: @unchecked Sendable {
     /// QEMU 进程退出时调用:停掉重连循环,把在途命令全部以错误回调。
     public func stop() {
         stopped = true
-        failAllPending("QEMU 已退出")
+        failAllPending("虚拟机已退出")
     }
 
     /// 连接断开或从未建立时,等回复的人不能永远等下去 ——
@@ -150,7 +150,7 @@ public final class QMPClient: @unchecked Sendable {
         }
         print("[qmp] 连接断开")
         close(fd); fd = -1
-        failAllPending("QMP 连接已断开")
+        failAllPending("与虚拟机的连接已断开")
     }
 
     /// 调用方必须已持有 lock。握手阶段与 execute 都经这里写。
@@ -180,7 +180,7 @@ public final class QMPClient: @unchecked Sendable {
         lock.lock()
         guard fd >= 0 else {
             lock.unlock()
-            completion(Self.errorReply("QMP 尚未连接(QEMU 还在启动,请稍候再试)"))
+            completion(Self.errorReply("虚拟机正在启动，请稍候"))
             return
         }
         let id = nextID

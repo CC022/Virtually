@@ -10,30 +10,30 @@ import Foundation
 import VirtuallyKit
 
 let usage = """
-用法: virtually <命令> [参数]
+用法：virtually <命令> [选项]
 
 资源库
   list                                   列出虚拟机
-  create <名字> [--os windows|ubuntu] [--cpus N] [--memory MB] [--disk GB]
+  create <名称> [--os windows|ubuntu] [--cpus N] [--memory MB] [--disk GB]
          [--network none|user] [--from-disk <镜像>]
-  install <名字> --iso <ISO> [--os windows|ubuntu] [--variant <id>] [--virtio-iso <ISO>]
-         [--username <用户>] [--password <密码>] [--cpus N] [--memory MB] [--disk GB]
-         [--no-run]                      准备好介质后默认用 run 开机开始安装
-  resize-disk <名字> <GB>                扩大系统盘(关机且未挂起时);下次开机 guest 分区自动跟着扩
-  inspect-iso <ISO>                      识别系统并列出可装的变体
-  build-tools [<输出>]                   重建 Windows 工具盘(默认在 Application Support)
+  install <名称> --iso <ISO> [--os windows|ubuntu] [--variant <id>] [--virtio-iso <ISO>]
+         [--username <用户名>] [--password <密码>] [--cpus N] [--memory MB] [--disk GB]
+         [--no-run]                      只准备安装介质，不启动虚拟机
+  resize-disk <名称> <GB>                扩大系统盘（需关机且未挂起），下次启动时自动扩展系统分区
+  inspect-iso <ISO>                      识别镜像的系统并列出可安装的版本
+  build-tools [<输出路径>]               重新生成 Windows 工具盘（默认位于 Application Support）
 
-驱动 app(调试)
-  run --vm <包> [--ramfb] [--vblk-probe] [--tools] [--cursor-debug] [--guest-cursor]
+调试（驱动 app）
+  run --vm <路径> [--ramfb] [--vblk-probe] [--tools] [--cursor-debug] [--guest-cursor]
       [--iso <ISO>] [--boot-img <raw>] [--display-size <宽>x<高>]
-  send <命令…> [--wait 秒]              命令集见 Virtually/Control/ControlServer.swift
-  log [行数]
-  stop                                   先挂起再退出
-  shot <输出.png> [x,y,w,h]              从共享帧缓冲截图
+  send <命令…> [--wait 秒]               向调试实例发送命令，命令列表见 Virtually/Control/ControlServer.swift
+  log [行数]                             显示调试日志的最后几行
+  stop                                   挂起虚拟机并退出调试实例
+  shot <输出.png> [x,y,w,h]              从帧缓冲截取虚拟机画面
 
-通用
-  --app <Virtually.app>                  默认找与本工具同目录的,其次按 bundle ID 找已安装的
-  --library <目录>                       默认用偏好设置里的资源库位置
+通用选项
+  --app <Virtually.app>                  默认使用与本工具同目录的 app，其次按 bundle ID 查找
+  --library <目录>                       默认使用偏好设置中的资源库位置
 """
 
 setvbuf(stdout, nil, _IOLBF, 0)
@@ -57,7 +57,7 @@ do {
     case "help", "-h", "--help":
         print(usage)
     default:
-        throw CLIError("未知命令 \(command)\n\n\(usage)")
+        throw CLIError("未知命令：\(command)\n\n\(usage)")
     }
 } catch {
     FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))

@@ -127,13 +127,13 @@ extension VMSession {
     /// 把这些文件装进一张新盘插给 guest。一次只能有一张盘在 guest 上。
     public func sendFiles(_ urls: [URL]) {
         guard !isBusy else { finish(state.blockedReason); return }
-        guard transfer == nil else { finish("已经有一张传输盘在 guest 上,先取回它"); return }
+        guard transfer == nil else { finish("已有传输盘连接到虚拟机，请先取回"); return }
         let names = urls.map(\.lastPathComponent)
         let stamp = Int(Date().timeIntervalSince1970)
         let image = bundle.url.appendingPathComponent("transfer-\(stamp).img")
         let disk = TransferDisk(image: image, node: "xfer\(stamp)", device: "xferdev\(stamp)",
                                 files: names, attached: false)
-        begin("正在打包 \(names.count) 个文件…")
+        begin("正在准备 \(names.count) 个文件…")
         Task {
             // 打盘要 hdiutil / diskutil / 复制,几秒到几十秒,放到后台线程
             let built: Error? = await Task.detached(priority: .userInitiated) {
@@ -147,9 +147,9 @@ extension VMSession {
                     return nil
                 } catch { return error }
             }.value
-            if let built { finish("打包失败:\(built.localizedDescription)"); return }
-            begin("正在插入传输盘…")
-            if let err = await qmp.addTransferDisk(disk) { finish("插入传输盘失败:\(err)"); return }
+            if let built { finish("无法准备文件：\(built.localizedDescription)"); return }
+            begin("正在连接传输盘…")
+            if let err = await qmp.addTransferDisk(disk) { finish("无法连接传输盘：\(err)"); return }
             var d = disk; d.attached = true
             transfer = d
             finish(nil)
@@ -159,7 +159,7 @@ extension VMSession {
     /// 从 guest 拔出,复制到宿主的下载目录,删镜像。
     public func retrieveTransferDisk() {
         guard !isBusy, let disk = transfer else { return }
-        begin("正在从 guest 弹出传输盘…")
+        begin("正在弹出传输盘…")
         Task {
             if disk.attached {
                 guard await ejectTransferDisk(disk) else { return }
@@ -171,7 +171,7 @@ extension VMSession {
     /// device_del 并等 DEVICE_DELETED 事件,然后删块节点。失败时把错误写到状态条并返回 false。
     private func ejectTransferDisk(_ disk: TransferDisk) async -> Bool {
         if let err = await qmp.removeTransferDevice(disk) {
-            finish("弹出失败:\(err)")
+            finish("无法弹出传输盘：\(err)")
             return false
         }
         // QEMU 要等 guest 确认才真的删设备;事件到了 transferDeviceGone 会把我们叫醒。
@@ -191,9 +191,9 @@ extension VMSession {
         transferGoneContinuation = nil
     }
 
-    /// 只读挂载镜像,复制到 ~/Downloads/<虚拟机名>-传出-<时间>/,在访达里露出来,删镜像
+    /// 只读挂载镜像,复制到 ~/Downloads/<虚拟机名>-取回-<时间>/,在访达里露出来,删镜像
     private func copyOutTransferDisk(_ disk: TransferDisk) async {
-        begin("正在复制到宿主…")
+        begin("正在取回文件…")
         let vmName = bundle.settings.name
         let result: Result<URL, Error> = await Task.detached(priority: .userInitiated) {
             do {
@@ -201,7 +201,7 @@ extension VMSession {
                 defer { mount.detach() }
                 let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"
                 let dest = FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Downloads/\(vmName)-传出-\(f.string(from: Date()))")
+                    .appendingPathComponent("Downloads/\(vmName)-取回-\(f.string(from: Date()))")
                 try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
                 let items = try FileManager.default.contentsOfDirectory(at: mount.path, includingPropertiesForKeys: nil)
                 for item in items where !item.lastPathComponent.hasPrefix(".")
@@ -220,7 +220,7 @@ extension VMSession {
         case .failure(let e):
             // 镜像留着,下次还能取
             transfer = nil
-            finish("复制失败:\(e.localizedDescription)。镜像还在 \(disk.image.lastPathComponent)")
+            finish("无法取回文件：\(e.localizedDescription)。镜像保留在 \(disk.image.lastPathComponent)")
         }
     }
 
@@ -230,7 +230,7 @@ extension VMSession {
         let stamp = image.deletingPathExtension().lastPathComponent.replacingOccurrences(of: "transfer-", with: "")
         let disk = TransferDisk(image: image, node: "xfer\(stamp)", device: "xferdev\(stamp)", files: [], attached: false)
         transfer = disk
-        begin("正在复制到宿主…")
+        begin("正在取回文件…")
         Task { await copyOutTransferDisk(disk) }
     }
 

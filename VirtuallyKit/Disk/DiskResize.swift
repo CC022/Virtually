@@ -42,9 +42,9 @@ extension VMBundle {
 
     /// 为什么现在不能改磁盘大小。nil 表示可以(是否正在运行由调用方另查)。
     public var diskResizeBlockedReason: String? {
-        if settings.install != nil { return "安装完成后才能改磁盘大小" }
+        if settings.install != nil { return "安装完成后才能更改磁盘大小" }
         if settings.snapshotShapes[suspendTag] != nil {
-            return "虚拟机已挂起。开机后在系统里关机(不是点红叉),才能改磁盘大小"
+            return "虚拟机已挂起。请启动虚拟机并在其系统中关机，然后再更改磁盘大小。"
         }
         return nil
     }
@@ -54,11 +54,11 @@ extension VMBundle {
         if let why = diskResizeBlockedReason { throw VMError.busy(why) }
         // qemu-img 自己也会因为拿不到写锁失败,但那句英文说不清楚是怎么回事
         if let holder = QEMUProcesses.holding(path: diskURL.path) {
-            throw VMError.busy("虚拟机正在运行(进程 \(holder)),关机后才能改磁盘大小")
+            throw VMError.busy("虚拟机运行时无法更改磁盘大小（PID \(holder)）")
         }
         let current = try diskVirtualSize(qemuImg: qemuImg)
         guard Int64(gb) * Self.bytesPerGB > current else {
-            throw VMError.invalid("磁盘只能扩大,不能缩小(当前 \(Self.wholeGB(current)) GB)")
+            throw VMError.invalid("磁盘只能扩大（当前为 \(Self.wholeGB(current)) GB）")
         }
         try Self.run(qemuImg, ["resize", "-f", "qcow2", diskURL.path, "\(gb)G"])
         settings.diskSizeGB = gb
@@ -117,13 +117,13 @@ public enum PartitionGrow {
 
     /// blocked 的代号 → 给用户看的话
     public static func explainBlocked(_ code: String) -> String {
-        let head = "磁盘已经扩大,但系统分区没法自动扩展"
-        if code == "partition-after-c" { return head + ":C: 后面还有恢复分区以外的分区。请在「磁盘管理」里手动调整" }
-        if code == "not-partition" { return head + ":根文件系统不在普通分区上(比如 LVM)。请在系统里手动调整" }
+        let head = "磁盘已扩大，但无法自动扩展系统分区："
+        if code == "partition-after-c" { return head + "C: 之后还有其他分区，请在“磁盘管理”中调整。" }
+        if code == "not-partition" { return head + "根文件系统不在普通分区上（例如 LVM），请在系统中手动调整。" }
         if code.hasPrefix("fstype-") {
-            return head + ":根文件系统是 \(code.dropFirst("fstype-".count)),只会自动扩 ext4。请在系统里手动调整"
+            return head + "根文件系统为 \(code.dropFirst("fstype-".count))，仅支持自动扩展 ext4，请在系统中手动调整。"
         }
-        return head + "(\(code))。请在系统里手动调整"
+        return head + "\(code)。请在系统中手动调整。"
     }
 
     /// grown 附带的提醒 → 给用户看的话。nil 表示不用说
@@ -131,8 +131,8 @@ public enum PartitionGrow {
         switch note {
         case nil: return nil
         case "winre-off":
-            return "系统分区已扩展,但 Windows 恢复环境没能重新启用。可在管理员命令行里运行 reagentc /enable 再试"
-        case let other?: return "系统分区已扩展(\(other))"
+            return "系统分区已扩展，但未能重新启用 Windows 恢复环境。可在管理员命令提示符中运行 reagentc /enable。"
+        case let other?: return "系统分区已扩展（\(other)）"
         }
     }
 

@@ -18,7 +18,7 @@ enum AppControl {
     static func run(_ args: inout Arguments) throws {
         let app = try AppLocator.app(&args)
         var launch = DebugLaunch()
-        guard let vm = args.option("vm") else { throw CLIError("run 需要 --vm <虚拟机包>") }
+        guard let vm = args.option("vm") else { throw CLIError("run 需要 --vm <虚拟机路径>") }
         launch.vmPath = URL(fileURLWithPath: vm).standardizedFileURL.path
         launch.controlSocket = controlSocket
         launch.forceRamfb = args.flag("ramfb")
@@ -31,14 +31,14 @@ enum AppControl {
         launch.displaySize = args.option("display-size")
 
         if let pid = runningDebugPID() {
-            print("已有调试实例(pid \(pid)),先把它停掉")
+            print("正在停止已有的调试实例（PID \(pid)）…")
             try stopInstance(pid: pid)
         }
 
-        guard let exe = app.executableURL else { throw CLIError("\(app.bundlePath) 里没有可执行文件") }
+        guard let exe = app.executableURL else { throw CLIError("\(app.bundlePath) 中没有可执行文件") }
         let pid = try spawnDetached(exe.path, launch.arguments, log: logFile)
         try "\(pid)".write(toFile: pidFile, atomically: true, encoding: .utf8)
-        print("已启动 pid=\(pid) 日志=\(logFile)")
+        print("已启动（PID \(pid)），日志：\(logFile)")
     }
 
     /// 脱离本进程的会话再启动:命令行工具被 Ctrl+C 或超时杀掉时,虚拟机不能跟着没掉。
@@ -59,7 +59,7 @@ enum AppControl {
         defer { argv.forEach { free($0) } }
         var pid: pid_t = 0
         let rc = posix_spawn(&pid, path, &actions, &attr, argv, environ)
-        guard rc == 0 else { throw CLIError("启动失败:\(String(cString: strerror(rc)))") }
+        guard rc == 0 else { throw CLIError("无法启动：\(String(cString: strerror(rc)))") }
         return pid
     }
 
@@ -84,7 +84,7 @@ enum AppControl {
 
     private static func deliver(_ line: String) throws {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw CLIError("socket() 失败") }
+        guard fd >= 0 else { throw CLIError("无法创建 socket") }
         defer { close(fd) }
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
@@ -99,7 +99,7 @@ enum AppControl {
             }
         }
         guard connected else {
-            throw CLIError("连不上调试实例(\(controlSocket))。先用 virtually run --vm <包> 启动。")
+            throw CLIError("无法连接调试实例（\(controlSocket)）。请先用 virtually run --vm <路径> 启动。")
         }
         let data = Array((line + "\n").utf8)
         _ = data.withUnsafeBufferPointer { write(fd, $0.baseAddress, $0.count) }
@@ -121,7 +121,7 @@ enum AppControl {
     // MARK: stop
 
     static func stop(_ args: inout Arguments) throws {
-        guard let pid = runningDebugPID() else { print("没有在跑的调试实例"); return }
+        guard let pid = runningDebugPID() else { print("没有正在运行的调试实例"); return }
         try stopInstance(pid: pid)
         print("已停止")
     }
@@ -140,12 +140,12 @@ enum AppControl {
             let recent = newLog(since: before)
             if recent.contains("取消退出") {
                 let why = recent.split(separator: "\n").filter { $0.hasPrefix("[vm]") || $0.hasPrefix("[app]") }
-                throw CLIError("app 取消了退出,虚拟机还开着:\n" + why.joined(separator: "\n")
-                               + "\n可以先 send 关机(ACPI),或在窗口里处理后再 stop。")
+                throw CLIError("app 取消了退出，虚拟机仍在运行：\n" + why.joined(separator: "\n")
+                               + "\n可先用 send shutdown 关机，或在窗口中处理后再 stop。")
             }
             Thread.sleep(forTimeInterval: 1)
         }
-        throw CLIError("3 分钟还没退出,没有强杀。看 virtually log 里卡在哪。")
+        throw CLIError("3 分钟内未退出，未强制结束。请用 virtually log 查看原因。")
     }
 
     private static func runningDebugPID() -> pid_t? {
@@ -163,17 +163,17 @@ enum AppControl {
         let log = (try? String(contentsOfFile: logFile, encoding: .utf8)) ?? ""
         let regex = try NSRegularExpression(pattern: #"映射 (\d+)x(\d+) stride=(\d+)"#)
         guard let m = regex.matches(in: log, range: NSRange(log.startIndex..., in: log)).last else {
-            throw CLIError("日志里还没有帧缓冲映射记录")
+            throw CLIError("日志中尚无帧缓冲映射记录")
         }
         func group(_ i: Int) -> Int { Int((log as NSString).substring(with: m.range(at: i)))! }
         let (w, h, stride) = (group(1), group(2), group(3))
         let data = try Data(contentsOf: URL(fileURLWithPath: SessionPaths.debug.framebuffer), options: .alwaysMapped)
-        guard data.count >= stride * h else { throw CLIError("帧缓冲比 \(w)x\(h) 小,画面可能正在改尺寸,再试一次") }
+        guard data.count >= stride * h else { throw CLIError("帧缓冲小于 \(w)x\(h)，画面可能正在调整尺寸，请重试") }
 
         var rect = CGRect(x: 0, y: 0, width: w, height: h)
         if let crop = args.next() {
             let f = crop.split(separator: ",").compactMap { Int($0) }
-            guard f.count == 4 else { throw CLIError("裁剪格式是 x,y,w,h") }
+            guard f.count == 4 else { throw CLIError("裁剪区域的格式为 x,y,w,h") }
             rect = CGRect(x: f[0], y: f[1], width: f[2], height: f[3])
                 .intersection(CGRect(x: 0, y: 0, width: w, height: h))
         }
@@ -186,9 +186,9 @@ enum AppControl {
                                  provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent),
               let image = full.cropping(to: rect),
               let dest = CGImageDestinationCreateWithURL(out as CFURL, UTType.png.identifier as CFString, 1, nil)
-        else { throw CLIError("生成图片失败") }
+        else { throw CLIError("无法生成图片") }
         CGImageDestinationAddImage(dest, image, nil)
-        guard CGImageDestinationFinalize(dest) else { throw CLIError("写 \(out.path) 失败") }
+        guard CGImageDestinationFinalize(dest) else { throw CLIError("无法写入 \(out.path)") }
         print("\(image.width)x\(image.height) -> \(out.path)")
     }
 }

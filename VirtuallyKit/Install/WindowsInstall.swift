@@ -78,7 +78,7 @@ public enum ISOInspector {
         defer { try? handle.close() }
 
         guard let header = try handle.read(upToCount: 208), header.count == 208 else {
-            throw InstallError.notWindowsISO("install.wim 头部读取失败")
+            throw InstallError.notWindowsISO("无法读取 install.wim 头部")
         }
         guard header.prefix(8) == Data("MSWIM\0\0\0".utf8) else {
             throw InstallError.notWindowsISO("install.wim 不是有效的 WIM 文件")
@@ -98,7 +98,7 @@ public enum ISOInspector {
 
         try handle.seek(toOffset: xmlOffset)
         guard let raw = try handle.read(upToCount: xmlSize) else {
-            throw InstallError.notWindowsISO("install.wim 的 XML 元数据读取失败")
+            throw InstallError.notWindowsISO("无法读取 install.wim 的 XML 元数据")
         }
         // WIM 的元数据是 UTF-16LE(带 BOM),不是 UTF-8
         guard let xml = String(data: raw, encoding: .utf16LittleEndian) else {
@@ -144,7 +144,7 @@ public enum ISOInspector {
             // plist 里找 dev-entry 与 mount-point
             guard let mountPoint = Mount.firstValue(after: "<key>mount-point</key>", in: out),
                   let dev = Mount.firstValue(after: "<key>dev-entry</key>", in: out) else {
-                throw InstallError.notWindowsISO("挂载 ISO 失败")
+                throw InstallError.notWindowsISO("无法装载 ISO")
             }
             self.path = URL(fileURLWithPath: mountPoint)
             self.device = dev
@@ -554,7 +554,7 @@ public enum SupportImageBuilder {
             try fm.createDirectory(at: sources, withIntermediateDirectories: true)
             let bootWim = iso.appendingPathComponent("sources/boot.wim")
             guard fm.fileExists(atPath: bootWim.path) else {
-                throw InstallError.imageBuildFailed("ISO 里找不到 sources/boot.wim")
+                throw InstallError.imageBuildFailed("ISO 中找不到 sources/boot.wim")
             }
             try fm.copyItem(at: bootWim, to: sources.appendingPathComponent("boot.wim"))
         }
@@ -778,9 +778,9 @@ public enum InstallError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .notWindowsISO(let m): return "ISO 检查失败:\(m)"
-        case .unsupportedISO(let m): return "安装镜像不合用:\(m)"
-        case .imageBuildFailed(let m): return "支持盘构建失败:\(m)"
+        case .notWindowsISO(let m): return "无法识别安装镜像：\(m)"
+        case .unsupportedISO(let m): return "不支持此安装镜像：\(m)"
+        case .imageBuildFailed(let m): return "无法准备安装介质：\(m)"
         }
     }
 }

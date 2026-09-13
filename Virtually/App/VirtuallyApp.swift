@@ -57,7 +57,7 @@ struct VirtuallyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        WindowGroup("虚拟机", id: "library") {
+        WindowGroup("资源库", id: "library") {
             LibraryView()
                 .environment(app)
         }

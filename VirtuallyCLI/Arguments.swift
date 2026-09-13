@@ -27,7 +27,7 @@ struct Arguments {
 
     mutating func int(_ name: String) throws -> Int? {
         guard let raw = option(name) else { return nil }
-        guard let v = Int(raw) else { throw CLIError("--\(name) 要一个整数,收到 \(raw)") }
+        guard let v = Int(raw) else { throw CLIError("--\(name) 必须是整数，收到的是 \(raw)") }
         return v
     }
 
@@ -38,7 +38,7 @@ struct Arguments {
     }
 
     mutating func required(_ what: String) throws -> String {
-        guard let v = next() else { throw CLIError("缺少参数:\(what)") }
+        guard let v = next() else { throw CLIError("缺少参数：\(what)") }
         return v
     }
 

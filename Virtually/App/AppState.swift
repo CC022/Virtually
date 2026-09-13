@@ -99,12 +99,12 @@ final class AppState {
         let isDebugTarget = debugTarget == ref
         var options = isDebugTarget ? debugLaunch.sessionOptions : VMSession.Options()
         guard tools.isComplete else {
-            launchErrors[ref.path] = "Virtually.app 里缺少 QEMU 或固件,这个构建不完整。"
+            launchErrors[ref.path] = "应用不完整：缺少 QEMU 或固件。"
             print("[app] \(launchErrors[ref.path]!)")
             return nil
         }
         guard let bundle = try? VMBundle.load(at: ref.url) else {
-            launchErrors[ref.path] = "无法读取虚拟机包:\(ref.path)"
+            launchErrors[ref.path] = "无法读取虚拟机：\(ref.path)"
             print("[app] \(launchErrors[ref.path]!)")
             return nil
         }
@@ -114,7 +114,7 @@ final class AppState {
             let missing = ([media.iso, media.boot, media.tools] + [media.virtioISO].compactMap { $0 })
                 .filter { !FileManager.default.fileExists(atPath: $0) }
             if !missing.isEmpty {
-                launchErrors[ref.path] = "这台虚拟机还没装完,但安装介质不在了:\n" + missing.joined(separator: "\n")
+                launchErrors[ref.path] = "无法继续安装，找不到以下安装介质：\n" + missing.joined(separator: "\n")
                 print("[app] \(launchErrors[ref.path]!)")
                 return nil
             }
@@ -125,7 +125,7 @@ final class AppState {
         // 而 QEMU 的错误只写在 /tmp 的日志里,界面上就是一个永远转不完的圈。
         // 先自己查一遍,把话说清楚。
         if let holder = QEMUProcesses.holding(path: bundle.diskURL.path) {
-            launchErrors[ref.path] = "这台虚拟机已经在运行(进程 \(holder))。先把它关掉再开。"
+            launchErrors[ref.path] = "此虚拟机已在运行（PID \(holder)）。"
             print("[app] \(launchErrors[ref.path]!)")
             return nil
         }
@@ -290,7 +290,7 @@ final class AppState {
     /// 写回设置。名字变了就连目录一起改,返回新的引用。
     /// 改内存或核数会让挂起状态与快照对不上,界面上要提示;这里只管落盘。
     func updateSettings(_ ref: VMRef, _ settings: VMSettings) throws -> VMRef {
-        guard sessions[ref.path] == nil else { throw VMError.busy("虚拟机正在运行,关机后才能改设置") }
+        guard sessions[ref.path] == nil else { throw VMError.busy("请先将虚拟机关机，再更改设置") }
         var bundle = try VMBundle.load(at: ref.url)
         var settings = settings
         settings.name = VMSettings.sanitizedName(settings.name)
@@ -325,7 +325,7 @@ final class AppState {
 
     /// 扩大系统盘。只在关机态;下次开机 agent 上线后 guest 里的分区会跟着扩。
     func resizeDisk(_ ref: VMRef, toGB gb: Int) async throws {
-        guard sessions[ref.path] == nil else { throw VMError.busy("虚拟机正在运行,关机后才能改磁盘大小") }
+        guard sessions[ref.path] == nil else { throw VMError.busy("请先将虚拟机关机，再更改磁盘大小") }
         let qemuImg = tools.qemuImg
         try await Task.detached(priority: .userInitiated) {
             var bundle = try VMBundle.load(at: ref.url)
@@ -336,7 +336,7 @@ final class AppState {
 
     /// 整个包移到废纸篓 —— 几十 GB 的盘,误删了还能捞回来。
     func delete(_ ref: VMRef) throws {
-        guard sessions[ref.path] == nil else { throw VMError.busy("虚拟机正在运行,关机后才能删除") }
+        guard sessions[ref.path] == nil else { throw VMError.busy("请先将虚拟机关机，再删除") }
         try FileManager.default.trashItem(at: ref.url, resultingItemURL: nil)
         thumbnails[ref.path] = nil
         refreshLibrary()

@@ -9,12 +9,12 @@
 宿主 → guest   拖文件 → FATImageBuilder 打成 FAT32 raw 镜像(包内 transfer-<时间>.img)
                → QMP blockdev-add(raw 节点)+ device_add usb-storage,removable=on
                → Windows 里出现一个可移动磁盘
-guest → 宿主   用户把文件放到那个盘上 → 「取回并弹出」→ device_del(guest 侧等于拔 U 盘)
+guest → 宿主   用户把文件放到那个盘上 → 「取回」→ device_del(guest 侧等于拔 U 盘)
                → 等 DEVICE_DELETED 事件 → blockdev-del → 宿主只读挂载镜像
-               → 复制到 ~/Downloads/<虚拟机名>-传出-<时间>/ → 在访达里露出来 → 删镜像
+               → 复制到 ~/Downloads/<虚拟机名>-取回-<时间>/ → 在访达里露出来 → 删镜像
 ```
 
-- 入口:「传文件」面板的拖放区、面板里的「选择文件…」、直接拖到画面上。
+- 入口:「传输文件」面板的拖放区、面板里的「选择文件…」、直接拖到画面上。
   调试通道:`xfer <路径>...` / `xfer retrieve`,与界面走同一条 `VMSession` 路径。
 - 一次只有一张盘在 guest 上。镜像大小 = 文件总量 × 1.1 + 32MB,最少 64MB(FAT32 有簇数下限)。
 - Windows 对可移动盘默认「快速删除」策略,不缓存写入,直接拔是安全的。

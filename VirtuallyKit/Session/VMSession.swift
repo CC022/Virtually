@@ -73,12 +73,12 @@ public final class VMSession {
         /// 不能操作时给用户的原因;可操作时为 nil
         public var blockedReason: String? {
             switch self {
-            case .idle:         return "虚拟机还没启动"
-            case .starting:     return "QEMU 还在启动,尚未连上控制通道,稍候再试"
-            case .restoring:    return "正在恢复上次保存的状态,稍候再试"
-            case .suspending:   return "正在保存状态"
-            case .shuttingDown: return "正在关机"
-            case .stopped:      return "虚拟机已经关闭"
+            case .idle:         return "虚拟机尚未启动"
+            case .starting:     return "虚拟机正在启动，请稍候"
+            case .restoring:    return "虚拟机正在恢复，请稍候"
+            case .suspending:   return "虚拟机正在挂起"
+            case .shuttingDown: return "虚拟机正在关机"
+            case .stopped:      return "虚拟机已关闭"
             case .running:      return nil
             }
         }
@@ -266,11 +266,11 @@ public final class VMSession {
         guard state.isLive, !state.isEnding else { return }
         let previous = state
         state = .shuttingDown
-        begin("正在关机")
+        begin("正在关机…")
         Task {
             if let err = QMPClient.errorText(await qmp.execute("system_powerdown")) {
                 state = previous          // 没发出去,虚拟机还在跑
-                finish("关机失败:\(err)")
+                finish("无法关机：\(err)")
             }
         }
     }
@@ -409,8 +409,8 @@ public final class VMSession {
         // 装完之后也一样,要关机或重启一次,下次开机不挂介质了才能挂起。
         guard options.installMedia == nil else {
             finish(bundle.settings.install == nil
-                   ? "刚装完的这次开机不能挂起。从电源菜单关机或在虚拟机里重启一次,之后就可以了"
-                   : "正在安装,不能挂起。等安装完成,或从电源菜单关机")
+                   ? "安装后首次启动时无法挂起。请重新启动虚拟机或将其关机。"
+                   : "安装期间无法挂起。请等待安装完成，或将虚拟机关机。")
             return false
         }
         guard state.acceptsCommands else {
@@ -418,7 +418,7 @@ public final class VMSession {
             return false
         }
         state = .suspending
-        begin("正在保存状态")
+        begin("正在挂起…")
         // 先拔掉透传的 USB 设备。usb-host 会进内存状态,而下次开机命令行上没有它,
         // loadvm 报 Unknown savevm section,挂起状态就废了,表现为「明明挂起了,再开却是重启」。
         await detachAllUSB()
@@ -428,7 +428,7 @@ public final class VMSession {
             if state == .suspending { state = .running }
             // 最常见的原因是挂了不支持快照的盘(`virtually run --tools` 挂的工具盘就是),
             // 平时不会遇到。把 QEMU 的原话带上,否则无从下手。
-            finish("保存状态失败:\(err)。可以从电源菜单关机。")
+            finish("无法挂起：\(err)。可以改为关机。")
             return false
         }
         rememberShape(of: suspendTag)
@@ -516,7 +516,7 @@ public final class VMSession {
         if let installerStatus { return installerStatus }
         switch state {
         case .starting:  return "正在启动…"
-        case .restoring: return "正在恢复上次的状态…"
+        case .restoring: return "正在恢复…"
         default:         return nil
         }
     }
@@ -541,14 +541,14 @@ public final class VMSession {
     // MARK: 网络
 
     public func applyNetwork(_ mode: NetworkMode) {
-        begin("正在切换网络")
+        begin("正在切换网络…")
         Task {
             let err = await setNetwork(mode)
             if err == nil {
                 networkMode = mode
                 persistNetwork(mode)
             }
-            finish(err.map { "切换网络失败:\($0)" })
+            finish(err.map { "无法切换网络：\($0)" })
         }
     }
 
@@ -559,13 +559,13 @@ public final class VMSession {
     public func saveSnapshot(named tag: String) {
         guard !isBusy else { lastError = state.blockedReason; return }
         if let problem = Self.snapshotNameProblem(tag) { lastError = problem; return }
-        begin("正在保存快照「\(tag)」")
+        begin("正在拍摄快照…")
         Task {
             // 同挂起:透传的 USB 设备不能进快照,恢复时它不在了整条快照就读不回来
             await detachAllUSB()
             let err = await qmp.saveSnapshot(tag: tag)
             if err == nil { rememberShape(of: tag) }
-            finish(err.map { "保存失败:\($0)" })
+            finish(err.map { "无法拍摄快照：\($0)" })
             await refreshSnapshotsNow()
         }
     }
@@ -573,12 +573,12 @@ public final class VMSession {
     /// 快照名进 HMP 命令行,按空格切参数;`info snapshots` 的输出也按空格切列。
     /// 所以只允许一小撮字符。内部标签也不许用户占。
     public nonisolated static func snapshotNameProblem(_ tag: String) -> String? {
-        if tag.isEmpty { return "快照名不能为空" }
-        if tag == suspendTag { return "「\(tag)」是内部保留的名字" }
+        if tag.isEmpty { return "请输入快照名称" }
+        if tag == suspendTag { return "“\(tag)”是保留名称" }
         let ok = tag.unicodeScalars.allSatisfy {
             CharacterSet.alphanumerics.contains($0) || "_-.".unicodeScalars.contains($0)
         }
-        if !ok || tag.count > 64 { return "快照名只能用字母、数字、_ - .(不能有空格),最多 64 个字符" }
+        if !ok || tag.count > 64 { return "名称只能包含字母、数字和 _ - .，最多 64 个字符" }
         return nil
     }
 
@@ -614,10 +614,10 @@ public final class VMSession {
         // **必须在动手之前挡住。** QEMU 的 loadvm 是先回滚磁盘再读内存,
         // 等它报错时磁盘已经换过去了,虚拟机只能断电。
         guard canRestore(tag) else {
-            lastError = "「\(tag)」是在不同的设备配置下存的,恢复会毁掉当前磁盘,已拒绝"
+            lastError = "快照“\(tag)”与当前硬件配置不兼容，无法恢复"
             return
         }
-        begin("正在恢复「\(tag)」")
+        begin("正在恢复快照…")
         Task {
             await detachAllUSB()
             guard let err = await qmp.loadSnapshot(tag: tag) else {
@@ -643,22 +643,22 @@ public final class VMSession {
     /// 最常见的失败是设备配置变了 —— 快照存的是整机状态,包含每个设备的状态,
     /// 设备增减之后就对不上。直接把 QEMU 的原话抛给用户没有意义。
     public nonisolated static func explainRestore(err: String, tag: String) -> String {
-        let tail = "。虚拟机已断电,磁盘停在「\(tag)」那一刻,重新开机即可"
+        let tail = "。虚拟机已关机，磁盘已回到快照“\(tag)”，可以重新启动。"
         if err.contains("does not exist in one or more devices")
             || err.contains("Unknown savevm section")
             || err.contains("Unknown ramblock") {
-            return "「\(tag)」与当前设备配置不匹配,无法恢复" + tail
+            return "快照“\(tag)”与当前硬件配置不兼容" + tail
         }
-        return "恢复失败:\(err)" + tail
+        return "无法恢复快照：\(err)" + tail
     }
 
     public func deleteSnapshot(_ tag: String) {
         guard !isBusy else { lastError = state.blockedReason; return }
-        begin("正在删除「\(tag)」")
+        begin("正在删除快照…")
         Task {
             let err = await qmp.deleteSnapshot(tag: tag)
             if err == nil { forgetShape(of: tag) }
-            finish(err.map { "删除失败:\($0)" })
+            finish(err.map { "无法删除快照：\($0)" })
             await refreshSnapshotsNow()
         }
     }
@@ -695,7 +695,7 @@ public final class VMSession {
 
     public func attachUSB(_ d: USBDevice) {
         guard !isBusy, !isAttached(d) else { return }
-        begin("正在插入 \(d.name)")
+        begin("正在连接“\(d.name)”…")
         Task {
             let err = await qmp.attachUSB(d)
             if err == nil { attachedUSB[d.key] = d }
@@ -705,7 +705,7 @@ public final class VMSession {
 
     public func detachUSB(_ d: USBDevice) {
         guard !isBusy, isAttached(d) else { return }
-        begin("正在拔出 \(d.name)")
+        begin("正在断开“\(d.name)”…")
         Task {
             let err = await qmp.detachUSB(d)
             // 「设备不存在」也算拔掉了:多半是宿主侧已经物理拔出,QEMU 早就把它删了
@@ -730,12 +730,12 @@ public final class VMSession {
     /// QMP 的原始错误对用户没有意义,补一句可操作的解释
     public nonisolated static func explainUSB(err: String, device: USBDevice) -> String {
         if err.contains("Permission") || err.contains("Access") {
-            return "\(device.name):被系统占用。若是 U 盘,先在访达里推出。"
+            return "“\(device.name)”正被 macOS 使用。如果是 U 盘，请先在访达中推出。"
         }
         if err.contains("No such device") || err.contains("not found") {
-            return "\(device.name):设备已拔出"
+            return "“\(device.name)”已移除"
         }
-        return "\(device.name):\(err)"
+        return "“\(device.name)”：\(err)"
     }
 
     /// 网络热插拔:不重启虚拟机就能换网络模式。返回错误文案,成功为 nil。
@@ -943,13 +943,13 @@ public final class VMSession {
         let text: String
         switch rest {
         case "waiting":         text = "正在准备安装…"
-        case "confirmed":       text = "已开始安装…"
-        case "confirm-failed":  text = "自动确认失败,请在虚拟机里点「Install」"
-        case "RUNNING":         text = "正在安装系统…"
-        case "POST_RUNNING":    text = "正在做最后配置…"
-        case "DONE":            text = "安装完成,正在重启…"
-        case "ERROR":           text = "安装器报错,详情见虚拟机画面"
-        default:                text = "安装中(\(rest))…"
+        case "confirmed":       text = "正在安装…"
+        case "confirm-failed":  text = "未能自动开始安装，请在虚拟机中点按“Install”"
+        case "RUNNING":         text = "正在安装…"
+        case "POST_RUNNING":    text = "正在完成配置…"
+        case "DONE":            text = "安装完成，正在重新启动…"
+        case "ERROR":           text = "安装出错，请查看虚拟机窗口"
+        default:                text = "正在安装…"
         }
         installerStatus = text
         print("[install] \(rest) → \(text)")
@@ -1340,7 +1340,7 @@ public final class VMSession {
 
     /// 把 QEMU 日志的尾部带上。写锁冲突、找不到固件、ISO 路径错,原话都在那里。
     public nonisolated static func describeExit(code: Int32, ran: TimeInterval, logPath: String) -> String {
-        var text = "QEMU 在 \(Int(ran)) 秒后退出,退出码 \(code)"
+        var text = "虚拟机运行 \(Int(ran)) 秒后退出（退出码 \(code)）"
         if let log = try? String(contentsOfFile: logPath, encoding: .utf8) {
             let lines = log.split(whereSeparator: \.isNewline).suffix(12)
             if !lines.isEmpty { text += "\n\n" + lines.joined(separator: "\n") }
@@ -1356,8 +1356,8 @@ public enum VMSessionError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .channelListenFailed(let path, let e): return "无法监听 \(path):\(e.localizedDescription)"
-        case .qemuLaunchFailed(let e):              return "无法启动 QEMU:\(e.localizedDescription)"
+        case .channelListenFailed(let path, let e): return "无法建立显示连接：\(e.localizedDescription)"
+        case .qemuLaunchFailed(let e):              return "无法启动虚拟机：\(e.localizedDescription)"
         }
     }
 }

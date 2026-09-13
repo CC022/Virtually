@@ -36,7 +36,7 @@ public enum NetworkMode: String, Codable, CaseIterable {
 
     public var displayName: String {
         switch self {
-        case .user:        return "共享网络(NAT)"
+        case .user:        return "共享网络（NAT）"
         case .none:        return "无网络"
         }
     }
@@ -209,15 +209,15 @@ public struct VMSettings: Codable, Equatable {
         var adjusted: [String] = []
         if cpuCount < 1 || cpuCount > Self.hostCPUCount {
             cpuCount = min(max(1, cpuCount), Self.hostCPUCount)
-            adjusted.append("CPU 核数调整为 \(cpuCount)(主机共 \(Self.hostCPUCount) 核)")
+            adjusted.append("CPU 已调整为 \(cpuCount) 核（此 Mac 共 \(Self.hostCPUCount) 核）")
         }
         if memoryMB < 2048 || memoryMB > Self.maxMemoryMB {
             memoryMB = min(max(2048, memoryMB), Self.maxMemoryMB)
-            adjusted.append("内存调整为 \(memoryMB)MB(上限 \(Self.maxMemoryMB)MB,已为主机留 4GB)")
+            adjusted.append("内存已调整为 \(memoryMB) MB（最多 \(Self.maxMemoryMB) MB，为 macOS 保留 4 GB）")
         }
         if diskSizeGB < os.minDiskGB {
             diskSizeGB = os.minDiskGB
-            adjusted.append("磁盘调整为 \(os.minDiskGB)GB(\(os.displayName) 装得下的最小值)")
+            adjusted.append("磁盘已调整为 \(os.minDiskGB) GB（\(os.displayName) 的最低要求）")
         }
         return adjusted
     }
@@ -389,8 +389,8 @@ public enum VMError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .alreadyExists(let name): return "\(name) 已存在"
-        case .toolFailed(let tool, let out): return "\(tool) 执行失败:\n\(out)"
+        case .alreadyExists(let name): return "“\(name)”已存在"
+        case .toolFailed(let tool, let out): return "\(tool) 运行失败：\n\(out)"
         case .busy(let why): return why
         case .invalid(let why): return why
         }

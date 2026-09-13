@@ -42,7 +42,7 @@ struct LibraryView: View {
                 ContentUnavailableView {
                     Label("还没有虚拟机", systemImage: "pc")
                 } description: {
-                    Text("点右上角加号新建")
+                    Text("点按工具栏中的 + 新建虚拟机")
                 }
             }
         }
@@ -53,7 +53,7 @@ struct LibraryView: View {
         }
         .sheet(isPresented: $wizard) { NewVMWizard() }
         .sheet(item: $editing) { ref in VMSettingsSheet(ref: ref) }
-        .confirmationDialog("删除「\(deleting.map { $0.url.deletingPathExtension().lastPathComponent } ?? "")」?",
+        .confirmationDialog("要删除“\(deleting.map { $0.url.deletingPathExtension().lastPathComponent } ?? "")”吗？",
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("移到废纸篓", role: .destructive) {
                 if let ref = deleting {
@@ -62,9 +62,9 @@ struct LibraryView: View {
                 deleting = nil
             }
         } message: {
-            Text("整个虚拟机包(磁盘、快照、设置)会移到废纸篓,可以从那里恢复。")
+            Text("虚拟机的磁盘、快照和设置将移到废纸篓。")
         }
-        .alert("操作失败", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
+        .alert("无法完成操作", isPresented: Binding(get: { problem != nil }, set: { if !$0 { problem = nil } })) {
             Button("好") { problem = nil }
         } message: { Text(problem ?? "") }
         .task {
@@ -150,12 +150,12 @@ private struct VMSettingsSheet: View {
             .formStyle(.grouped)
 
             if shapeChanges {
-                Label("改了核数、内存或声卡,已挂起的状态和已有快照都会对不上,下次是冷启动。",
+                Label("更改 CPU、内存或声卡后，已挂起的状态和现有快照将无法恢复。",
                       systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
             if let current = currentDiskGB, diskGB > current {
-                Label("磁盘只能扩大。下次开机后会自动把系统分区扩到占满;恢复扩容前存的快照,磁盘会回到当时的大小。",
+                Label("磁盘只能扩大。下次启动时将自动扩展系统分区；恢复扩容前拍摄的快照会使磁盘回到原来的大小。",
                       systemImage: "info.circle")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -173,7 +173,7 @@ private struct VMSettingsSheet: View {
         .padding(20)
         .frame(width: 420)
         .task {
-            guard let b = try? VMBundle.load(at: ref.url) else { failure = "读不到配置"; return }
+            guard let b = try? VMBundle.load(at: ref.url) else { failure = "无法读取配置"; return }
             original = b.settings
             name = b.settings.name
             cpus = b.settings.cpuCount
@@ -186,14 +186,14 @@ private struct VMSettingsSheet: View {
                 diskGB = gb            // 先给值再给下限,Stepper 不会看到越界的中间态
                 currentDiskGB = gb
             } catch {
-                diskBlockedByBundle = "读不到磁盘大小:\(error.localizedDescription)"
+                diskBlockedByBundle = "无法读取磁盘大小：\(error.localizedDescription)"
             }
         }
     }
 
     /// 面板开着的时候虚拟机也可能被开起来(命令行、恢复的窗口),所以运行态实时看
     private var diskBlocked: String? {
-        if app.runningPaths.contains(ref.path) { return "虚拟机正在运行,关机后才能改磁盘大小" }
+        if app.runningPaths.contains(ref.path) { return "虚拟机运行时无法更改磁盘大小" }
         return diskBlockedByBundle
     }
 
@@ -381,14 +381,14 @@ private struct NewVMWizard: View {
                 if os.needsDriverISO {
                     LabeledContent("virtio 驱动") {
                         HStack {
-                            Text(virtioURL?.lastPathComponent ?? "未选择 virtio-win.iso")
+                            Text(virtioURL?.lastPathComponent ?? "未选择")
                                 .foregroundStyle(virtioURL == nil ? .secondary : .primary)
                                 .lineLimit(1).truncationMode(.middle)
                             Spacer()
                             Button("选择…") { picking = .virtio; showPicker = true }
                         }
                     }
-                    .help("显卡、网卡与 agent 通道的驱动都在这张 ISO 上,缺了装出来是黑屏")
+                    .help("包含 Windows 所需的显卡和网络驱动，必须提供")
                 }
 
                 if !variants.isEmpty {
@@ -416,12 +416,12 @@ private struct NewVMWizard: View {
             }
 
             if let detectedOS, detectedOS != os {
-                Label("这张镜像看起来是 \(detectedOS.displayName),请检查上面的「系统」",
+                Label("此镜像似乎是 \(detectedOS.displayName)，请检查“系统”选项",
                       systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
 
-            Text("全自动安装,\(os == .windows ? "约 10 分钟" : "约 12 分钟")。")
+            Text("将自动完成安装，约需 \(os == .windows ? 10 : 12) 分钟。")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -438,7 +438,7 @@ private struct NewVMWizard: View {
         VStack(alignment: .leading, spacing: 10) {
             ProgressView(value: phase.fraction)
             Text(phase.message).font(.callout)
-            Text("介质建好后会自动打开虚拟机窗口开始安装,全程约 10 分钟。")
+            Text("准备完成后将打开虚拟机窗口并开始安装。")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -75,7 +75,7 @@ WinRE 放在系统分区上是 Windows 支持的布局。顺序:
 | | 过程 | 结果 |
 |---|---|---|
 | 挂起态 `resize-disk` | CLI 直接拒绝 | 「虚拟机已挂起…」,rc=1 |
-| 缩小 `resize-disk … 60` | 拒绝 | 「磁盘只能扩大,不能缩小(当前 64 GB)」 |
+| 缩小 `resize-disk … 60` | 拒绝 | 「磁盘只能扩大（当前为 64 GB）」 |
 | Ubuntu 26.04.1,64 → 96GB | guest 里关机 → 扩 → 冷启动 | `VAGROW grown`,vda2 67.6GB → 101.9GB,`df` 94G,`sfdisk --verify` 无错,标记清掉 |
 | Ubuntu 扩完后挂起再恢复 | `ctl.sh stop` → `run` | 恢复成功,大小不变,不会再发一次扩分区 |
 | Windows 11 25H2,96 → 128GB | 同上 | `VAGROW grown 101933121536 137148481024`,恢复分区没了,C: 占满,WinRE `Enabled` 位于 partition3 |

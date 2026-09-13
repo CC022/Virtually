@@ -17,13 +17,13 @@ enum AppLocator {
         for url in candidates {
             if let bundle = Bundle(url: url), bundle.bundleIdentifier == bundleID { return bundle }
         }
-        throw CLIError("找不到 Virtually.app。先在 Xcode 里构建一次,或用 --app <路径> 指定。")
+        throw CLIError("找不到 Virtually.app。请先在 Xcode 中构建，或用 --app <路径> 指定。")
     }
 
     static func tools(_ args: inout Arguments) throws -> ToolPaths {
         let tools = ToolPaths(appBundle: try app(&args))
         guard tools.isComplete else {
-            throw CLIError("\(tools.qemu.deletingLastPathComponent().path) 里没有完整的 QEMU,这个 app 构建不完整。")
+            throw CLIError("\(tools.qemu.deletingLastPathComponent().path) 中缺少 QEMU，app 构建不完整。")
         }
         return tools
     }

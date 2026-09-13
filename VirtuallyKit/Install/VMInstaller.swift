@@ -39,11 +39,11 @@ public enum VMInstaller {
 
         public var message: String {
             switch self {
-            case .inspecting:        return "检查安装镜像…"
-            case .creatingBundle:    return "建包…"
-            case .buildingBootDisk:  return "构建安装盘(引导文件 + 应答文件),需要复制约 700MB…"
-            case .buildingToolsDisk: return "构建工具盘(guest agent)…"
-            case .ready:             return "介质就绪"
+            case .inspecting:        return "正在检查安装镜像…"
+            case .creatingBundle:    return "正在创建虚拟机…"
+            case .buildingBootDisk:  return "正在准备安装介质…"
+            case .buildingToolsDisk: return "正在准备 Virtually 工具…"
+            case .ready:             return "准备就绪"
             }
         }
     }
@@ -79,7 +79,7 @@ public enum VMInstaller {
         let os = settings.os
         if os.needsDriverISO {
             guard let virtioISO, FileManager.default.fileExists(atPath: virtioISO.path) else {
-                throw InstallError.notWindowsISO("找不到 virtio-win ISO,Windows 缺了它装完是黑屏")
+                throw InstallError.notWindowsISO("找不到 virtio-win 驱动镜像")
             }
         }
         progress(.creatingBundle)

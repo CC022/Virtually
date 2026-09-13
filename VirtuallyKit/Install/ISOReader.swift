@@ -39,7 +39,7 @@ public struct ISOReader {
         public var errorDescription: String? {
             switch self {
             case .notISO9660(let p): return "\(p) 不是可识别的 ISO9660 镜像"
-            case .notFound(let p):   return "镜像里找不到 \(p)"
+            case .notFound(let p):   return "镜像中找不到 \(p)"
             }
         }
     }

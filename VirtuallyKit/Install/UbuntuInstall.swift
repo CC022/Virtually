@@ -245,7 +245,7 @@ public enum UbuntuSeedDisk {
         defer { reader.close() }
         for f in efiFiles {
             guard reader.exists("/EFI/boot/\(f)") else {
-                throw InstallError.unsupportedISO("镜像里找不到 EFI/boot/\(f),这不像 Ubuntu 的安装镜像")
+                throw InstallError.unsupportedISO("镜像中找不到 EFI/boot/\(f)，这不是 Ubuntu 安装镜像")
             }
         }
         try FATImageBuilder.build(at: image, megabytes: 256, label: "CIDATA") { volume in
@@ -286,7 +286,7 @@ public enum UbuntuSeedDisk {
         let reader = try ISOReader(iso: iso)
         defer { reader.close() }
         guard reader.exists("/casper/install-sources.yaml") else {
-            throw InstallError.unsupportedISO("镜像里找不到 casper/install-sources.yaml")
+            throw InstallError.unsupportedISO("镜像中找不到 casper/install-sources.yaml")
         }
         let text = String(decoding: try reader.read("/casper/install-sources.yaml"), as: UTF8.self)
         return parseVariants(text)

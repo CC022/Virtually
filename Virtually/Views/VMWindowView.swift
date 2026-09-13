@@ -40,7 +40,7 @@ struct VMWindowView: View {
             } else if let why = app.launchErrors[ref.path] {
                 // 开不起来就要说清楚。以前这里是一个永远转不完的圈。
                 ContentUnavailableView {
-                    Label("开不了机", systemImage: "exclamationmark.triangle")
+                    Label("无法启动虚拟机", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(why)
                 }
@@ -78,21 +78,21 @@ struct VMWindowView: View {
             // 关机是不可逆的,不能一按就生效 —— 展开菜单让用户选
             Menu {
                 Button("关机") { session?.requestShutdown() }
-                Button("强制断电", role: .destructive) { confirmPowerOff = true }
+                Button("强制关机", role: .destructive) { confirmPowerOff = true }
             } label: {
                 Label("电源", systemImage: "power")
             }
             .help("电源")
             .buttonStyle(.borderless)
-            .confirmationDialog("强制断电?", isPresented: $confirmPowerOff) {
-                Button("强制断电", role: .destructive) { session?.forcePowerOff() }
+            .confirmationDialog("要强制关机吗？", isPresented: $confirmPowerOff) {
+                Button("强制关机", role: .destructive) { session?.forcePowerOff() }
             } message: {
-                Text("相当于拔掉电源线,虚拟机里没保存的东西都会丢。")
+                Text("虚拟机中未保存的内容将会丢失。")
             }
 
             panelButton(.network, "网络", "network")
             panelButton(.usb, "USB 设备", "cable.connector")
-            panelButton(.files, "传文件", "arrow.up.document")
+            panelButton(.files, "传输文件", "arrow.up.document")
             panelButton(.snapshots, "快照", "clock.arrow.trianglehead.counterclockwise.rotate.90")
         }
         .sharedBackgroundVisibility(.hidden)
@@ -191,7 +191,7 @@ private struct USBPanel: View {
             }
 
             if devices.isEmpty && !loading {
-                Text("没有设备").font(.caption).foregroundStyle(.secondary)
+                Text("没有 USB 设备").font(.caption).foregroundStyle(.secondary)
             }
 
             // 抢不到的设备直接灰掉开关,原因放 tooltip —— 不占版面。
@@ -240,7 +240,7 @@ private struct SnapshotPanel: View {
             Text("快照").font(.headline)
 
             if session.snapshots.isEmpty {
-                Text("还没有快照").font(.caption).foregroundStyle(.secondary)
+                Text("没有快照").font(.caption).foregroundStyle(.secondary)
             }
             ForEach(session.snapshots) { r in
                 HStack {
@@ -255,8 +255,8 @@ private struct SnapshotPanel: View {
                     }
                     .buttonStyle(.borderless)
                     .disabled(!session.canRestore(r.id))
-                    .help(session.canRestore(r.id) ? "恢复到这一刻"
-                          : "这条快照是在不同的设备配置下存的,恢复不了")
+                    .help(session.canRestore(r.id) ? "恢复到此快照"
+                          : "此快照与当前硬件配置不兼容")
                     Button(role: .destructive) { pendingDelete = r.id } label: {
                         Image(systemName: "trash")
                     }
@@ -269,7 +269,7 @@ private struct SnapshotPanel: View {
             Divider()
             HStack {
                 TextField("名称", text: $newName).textFieldStyle(.roundedBorder)
-                Button("保存") {
+                Button("拍摄") {
                     session.saveSnapshot(named: newName)
                     newName = ""
                 }
@@ -281,13 +281,15 @@ private struct SnapshotPanel: View {
         }
         .task { session.refreshSnapshots() }
         // 删快照是几个 GB 说没就没,而且撤不回来
-        .confirmationDialog("删除快照「\(pendingDelete ?? "")」?",
+        .confirmationDialog("要删除快照“\(pendingDelete ?? "")”吗？",
                             isPresented: Binding(get: { pendingDelete != nil },
                                                  set: { if !$0 { pendingDelete = nil } })) {
             Button("删除", role: .destructive) {
                 if let tag = pendingDelete { session.deleteSnapshot(tag) }
                 pendingDelete = nil
             }
+        } message: {
+            Text("此操作无法撤销。")
         }
     }
 }
@@ -301,24 +303,24 @@ private struct FileTransferPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("传文件").font(.headline)
+            Text("传输文件").font(.headline)
 
             if let t = session.transfer {
-                Label(t.attached ? "传输盘在 guest 上(可移动磁盘)" : "传输盘已弹出",
+                Label(t.attached ? "传输盘已连接到虚拟机" : "传输盘已弹出",
                       systemImage: "externaldrive.fill")
                     .font(.callout)
                 if !t.files.isEmpty {
                     Text(t.files.joined(separator: "、")).font(.caption).foregroundStyle(.secondary).lineLimit(3)
                 }
-                Text("在虚拟机里把要传回来的文件放到这个盘上,再点取回。")
+                Text("在虚拟机中将文件拷贝到此磁盘，然后点按“取回”。")
                     .font(.caption2).foregroundStyle(.secondary)
-                Button("取回并弹出") { session.retrieveTransferDisk() }
+                Button("取回") { session.retrieveTransferDisk() }
                     .disabled(session.isBusy)
             } else {
                 // 拖放区
                 VStack(spacing: 6) {
                     Image(systemName: "arrow.down.doc").font(.title2)
-                    Text("把文件拖到这里,或拖到画面上").font(.caption)
+                    Text("将文件拖到此处或虚拟机窗口中").font(.caption)
                     Button("选择文件…") { picking = true }.controlSize(.small)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 14)
@@ -327,12 +329,12 @@ private struct FileTransferPanel: View {
                     guard !urls.isEmpty else { return false }
                     session.sendFiles(urls); return true
                 }
-                Text("虚拟机里会出现一个 U 盘。取回时复制到「下载」并弹出。")
+                Text("文件将以 U 盘形式出现在虚拟机中，取回的文件存放在“下载”文件夹。")
                     .font(.caption2).foregroundStyle(.secondary)
 
                 ForEach(leftovers, id: \.self) { img in
                     HStack {
-                        Text("上次没取回:\(img.lastPathComponent)").font(.caption).lineLimit(1)
+                        Text("未取回：\(img.lastPathComponent)").font(.caption).lineLimit(1)
                         Spacer()
                         Button("取回") { session.retrieveLeftover(img) }.controlSize(.small)
                     }
