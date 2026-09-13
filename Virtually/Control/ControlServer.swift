@@ -375,6 +375,11 @@ final class ControlServer {
         case "qmp":
             let cmd = String(t.dropFirst(4)).trimmingCharacters(in: .whitespaces)
             Task { print("OK qmp \(cmd) -> \(await qmp.execute(cmd))") }
+        case "hmp":
+            // 一行 HMP 原样转给 QEMU。上面的 qmp 带不了参数,而开日志与跟踪都要参数:
+            // hmp log guest_errors / hmp trace-event virtio_gpu_cmd_* on,输出进 QEMU 的日志文件
+            let line = String(t.dropFirst(4)).trimmingCharacters(in: .whitespaces)
+            Task { print("OK hmp \(line) -> \(await qmp.hmp(line))") }
         default:
             agent.send(t)
             print("OK sent: \(t)")
