@@ -5,6 +5,9 @@ xcuserdata/
 DerivedData/
 build/
 
+# 本机签名身份(Team ID),见 Config/Project.xcconfig
+Config/Local.xcconfig
+
 # 第三方源码与构建树(QEMU、glib、pixman、libusb、pkgconf),由 ThirdParty/qemu 下的脚本生成
 ThirdParty/qemu/src/
 ThirdParty/qemu/build/

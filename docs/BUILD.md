@@ -29,6 +29,10 @@ ThirdParty/qemu/build.sh          # QEMU,只打 patches/0001(-display macos 后�
 **SDK 必须与部署目标同代**:`env.sh` 固定用 macOS 26 的 SDK 编第三方库。
 用更新的 SDK 编出来的 glib 会调用本机不存在的 `pipe2`,QEMU 一启动就崩。
 
+**签名**:仓库里不带 Team ID,默认 ad-hoc 签名,本机构建运行不需要开发者账号。
+要用自己的账号签名,新建 `Config/Local.xcconfig`(不进 git),写上
+`DEVELOPMENT_TEAM = <Team ID>` 与 `CODE_SIGN_IDENTITY = Apple Development`,详见 `Config/Project.xcconfig`。
+
 之后用 Xcode 打开 `Virtually.xcodeproj`,⌘R 运行、⌘U 测试。命令行:
 
 ```

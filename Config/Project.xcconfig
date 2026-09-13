@@ -1,0 +1,14 @@
+// 工程级设置的基底,Debug 与 Release 共用。
+//
+// 签名身份不进仓库。默认 ad-hoc 签名(Sign to Run Locally),clone 下来不配账号也能构建运行;
+// ad-hoc 时 Scripts/embed-qemu.sh 不给 QEMU 开 Hardened Runtime,原因见那里的注释。
+//
+// 要用自己的开发者账号签名,在本目录新建 Local.xcconfig(已被 .gitignore 忽略):
+//
+//     DEVELOPMENT_TEAM = <Team ID>
+//     CODE_SIGN_IDENTITY = Apple Development
+
+DEVELOPMENT_TEAM =
+CODE_SIGN_IDENTITY = -
+
+#include? "Local.xcconfig"

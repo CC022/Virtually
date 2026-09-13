@@ -54,6 +54,7 @@
 		A30000000000000000000012 /* ThirdParty */ = {isa = PBXFileReference; lastKnownFileType = folder; path = ThirdParty; sourceTree = "<group>"; };
 		A30000000000000000000013 /* Scripts */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Scripts; sourceTree = "<group>"; };
 		A30000000000000000000014 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		A30000000000000000000015 /* Project.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Project.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -115,6 +116,7 @@
 				A40000000000000000000003 /* VirtuallyCLI */,
 				A40000000000000000000004 /* VirtuallyKitTests */,
 				A30000000000000000000010 /* GuestAgent */,
+				A60000000000000000000003 /* Config */,
 				A30000000000000000000013 /* Scripts */,
 				A30000000000000000000012 /* ThirdParty */,
 				A30000000000000000000011 /* docs */,
@@ -131,6 +133,14 @@
 				A30000000000000000000004 /* VirtuallyKitTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A60000000000000000000003 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				A30000000000000000000015 /* Project.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -328,6 +338,7 @@
 /* Begin XCBuildConfiguration section */
 		C00000000000000000000001 /* Debug (project) */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A30000000000000000000015 /* Project.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;
@@ -357,6 +368,7 @@
 		};
 		C00000000000000000000002 /* Release (project) */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A30000000000000000000015 /* Project.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ENABLE_MODULES = YES;

@@ -100,8 +100,9 @@ RUNTIME=(--options runtime)
 for lib in "$FRAMEWORKS"/lib*.dylib; do
     codesign --force --timestamp=none --sign "$IDENTITY" "$lib"
 done
-codesign --force --timestamp=none --sign "$IDENTITY" "${RUNTIME[@]}" "$MACOS/qemu-img"
-codesign --force --timestamp=none --sign "$IDENTITY" "${RUNTIME[@]}" \
+# 空数组要写成 ${RUNTIME[@]+"${RUNTIME[@]}"}:macOS 自带的 bash 3.2 在 set -u 下把 "${RUNTIME[@]}" 当未定义变量
+codesign --force --timestamp=none --sign "$IDENTITY" ${RUNTIME[@]+"${RUNTIME[@]}"} "$MACOS/qemu-img"
+codesign --force --timestamp=none --sign "$IDENTITY" ${RUNTIME[@]+"${RUNTIME[@]}"} \
     --entitlements "$QEMU_ROOT/qemu.entitlements" "$MACOS/qemu-system-aarch64"
 
 echo "已嵌入 QEMU:$(ls "$FRAMEWORKS" | grep -c dylib) 个 dylib"

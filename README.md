@@ -18,3 +18,7 @@
 | [USB.md](docs/USB.md) | USB 透传 |
 | [TRANSFER.md](docs/TRANSFER.md) | 传文件与剪贴板 |
 | [PENDING-VERIFICATION.md](docs/PENDING-VERIFICATION.md) | 待人工验证的项 |
+
+## 许可证
+
+GNU 通用公共许可证第 2 版或(由你选择)任何更新的版本(GPL-2.0-or-later),全文见 [LICENSE](LICENSE)。
