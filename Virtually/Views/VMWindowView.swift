@@ -80,7 +80,7 @@ struct VMWindowView: View {
                 Button("关机") { session?.requestShutdown() }
                 Button("强制关机", role: .destructive) { confirmPowerOff = true }
             } label: {
-                Label("电源", systemImage: "power")
+                ToolbarIcon(title: "电源", symbol: "power")
             }
             .help("电源")
             .buttonStyle(.borderless)
@@ -100,7 +100,7 @@ struct VMWindowView: View {
 
     private func panelButton(_ which: Panel, _ title: String, _ symbol: String) -> some View {
         Button { panel = (panel == which) ? nil : which } label: {
-            Label(title, systemImage: symbol)
+            ToolbarIcon(title: title, symbol: symbol)
         }
         .help(title)
         .buttonStyle(.borderless)
@@ -121,6 +121,20 @@ struct VMWindowView: View {
                 .frame(width: 300)
             }
         }
+    }
+}
+
+/// 工具栏按钮的图标。borderless 按钮能点中的只有图标自己的外框,而 SF Symbol 宽窄差很多:
+/// 实测(uidump)cable.connector 只有 8×16pt,别的 15×15 上下,USB 那个几乎点不中。
+/// 统一给一块 28pt 见方的点击区域,与图标形状无关;contentShape 让透明的部分也算数。
+private struct ToolbarIcon: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        Label(title, systemImage: symbol)
+            .frame(minWidth: 28, minHeight: 28)
+            .contentShape(.rect)
     }
 }
 
