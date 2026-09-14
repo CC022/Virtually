@@ -1,0 +1,375 @@
+--- a/target/arm/hvf/hvf.c	2025-05-28 15:05:46
++++ b/target/arm/hvf/hvf.c	2026-09-13 21:33:05
+@@ -1796,18 +1796,125 @@
+     }
+ 
+     return hvf_vtimer_val_raw();
++}
++
++/*
++ * 退出统计(环境变量 VIRTUALLY_HVF_STATS=1 开启):每秒往 stderr(即 QEMU 日志)打一行,
++ * 按类别列出每秒退出次数,以及 vCPU 时间分给了「跑 guest / 等 BQL / WFI 空闲 / 其余」各多少。
++ * 采样器看不出哪类退出贵,这个能。见 docs/PERFORMANCE.md。
++ *
++ * 计数都在 BQL 下改;快路径(不拿 BQL)的计数先记在局部变量里,拿到锁后再并进来。
++ * 不开的时候每次退出只多一次分支。
++ */
++typedef struct HVFStats {
++    uint64_t exits, pmu_fast, vtimer, kick, mmio, psci, wfe, other;
++    uint64_t icc_iar, icc_eoi, icc_dir, icc_sgi, icc_other, pmu, sysreg_other;
++    uint64_t wfi_sleep, wfi_irq, wfi_short, wfi_past, wfi_ipi;
++    uint64_t ns_guest, ns_bql, ns_idle;
++    uint32_t other_reg;
++    uint64_t last;
++} HVFStats;
++static HVFStats hvf_stats;
++static int hvf_stats_on = -1;
++
++#define HVF_STAT(field) do {                    \
++        if (unlikely(hvf_stats_on > 0)) {       \
++            hvf_stats.field++;                  \
++        }                                       \
++    } while (0)
++
++static inline bool hvf_stats_enabled(void)
++{
++    if (unlikely(hvf_stats_on < 0)) {
++        hvf_stats_on = getenv("VIRTUALLY_HVF_STATS") != NULL;
++    }
++    return hvf_stats_on > 0;
+ }
+ 
++static inline uint64_t hvf_stats_now(void)
++{
++    return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
++}
++
++static void hvf_stats_tick(uint64_t now)
++{
++    HVFStats *s = &hvf_stats;
++    CPUState *c;
++    int n = 0;
++    uint64_t dt;
++    double per, pct;
++
++    if (!s->last) {
++        s->last = now;
++        return;
++    }
++    dt = now - s->last;
++    if (dt < NANOSECONDS_PER_SECOND) {
++        return;
++    }
++    CPU_FOREACH(c) {
++        n++;
++    }
++    per = (double)NANOSECONDS_PER_SECOND / dt;
++    pct = 100.0 / ((double)dt * n);
++    fprintf(stderr,
++            "[hvf] exits=%.0f pmu_fast=%.0f vtimer=%.0f kick=%.0f "
++            "wfi(sleep=%.0f irq=%.0f short=%.0f past=%.0f ipi=%.0f) wfe=%.0f "
++            "icc(iar=%.0f eoi=%.0f dir=%.0f sgi=%.0f other=%.0f) pmu=%.0f "
++            "sysreg=%.0f(last 0x%08x) mmio=%.0f psci=%.0f other=%.0f | "
++            "guest=%.1f%% bql=%.1f%% idle=%.1f%% rest=%.1f%%\n",
++            s->exits * per, s->pmu_fast * per, s->vtimer * per, s->kick * per,
++            s->wfi_sleep * per, s->wfi_irq * per, s->wfi_short * per,
++            s->wfi_past * per, s->wfi_ipi * per, s->wfe * per,
++            s->icc_iar * per, s->icc_eoi * per, s->icc_dir * per,
++            s->icc_sgi * per, s->icc_other * per, s->pmu * per,
++            s->sysreg_other * per, s->other_reg, s->mmio * per, s->psci * per,
++            s->other * per,
++            s->ns_guest * pct, s->ns_bql * pct, s->ns_idle * pct,
++            100.0 - (s->ns_guest + s->ns_bql + s->ns_idle) * pct);
++    memset(s, 0, sizeof(*s));
++    s->last = now;
++}
++
++static void hvf_stats_sysreg(uint32_t reg)
++{
++    if (reg == SYSREG_ICC_IAR1_EL1 || reg == SYSREG_ICC_IAR0_EL1) {
++        hvf_stats.icc_iar++;
++    } else if (reg == SYSREG_ICC_EOIR1_EL1 || reg == SYSREG_ICC_EOIR0_EL1) {
++        hvf_stats.icc_eoi++;
++    } else if (reg == SYSREG_ICC_DIR_EL1) {
++        hvf_stats.icc_dir++;
++    } else if (reg == SYSREG_ICC_SGI1R_EL1 || reg == SYSREG_ICC_SGI0R_EL1 ||
++               reg == SYSREG_ICC_ASGI1R_EL1) {
++        hvf_stats.icc_sgi++;
++    } else if (SYSREG_OP0(reg) == 3 && SYSREG_OP1(reg) == 0 &&
++               (SYSREG_CRN(reg) == 12 ||
++                (SYSREG_CRN(reg) == 4 && SYSREG_CRM(reg) == 6))) {
++        hvf_stats.icc_other++;
++    } else if (SYSREG_OP0(reg) == 3 && SYSREG_OP1(reg) == 3 &&
++               SYSREG_CRN(reg) == 9) {
++        hvf_stats.pmu++;
++    } else {
++        hvf_stats.sysreg_other++;
++        hvf_stats.other_reg = reg;
++    }
++}
++
+ static void hvf_wait_for_ipi(CPUState *cpu, struct timespec *ts)
+ {
+     /*
+      * Use pselect to sleep so that other threads can IPI us while we're
+      * sleeping.
+      */
++    uint64_t t0 = hvf_stats_enabled() ? hvf_stats_now() : 0;
++
+     qatomic_set_mb(&cpu->thread_kicked, false);
+     bql_unlock();
+     pselect(0, 0, 0, 0, ts, &cpu->accel->unblock_ipi_mask);
+     bql_lock();
++    if (t0) {
++        hvf_stats.ns_idle += hvf_stats_now() - t0;
++    }
+ }
+ 
+ static void hvf_wfi(CPUState *cpu)
+@@ -1824,6 +1931,7 @@
+ 
+     if (cpu->interrupt_request & (CPU_INTERRUPT_HARD | CPU_INTERRUPT_FIQ)) {
+         /* Interrupt pending, no need to wait */
++        HVF_STAT(wfi_irq);
+         return;
+     }
+ 
+@@ -1832,6 +1940,7 @@
+ 
+     if (!(ctl & 1) || (ctl & 2)) {
+         /* Timer disabled or masked, just wait for an IPI. */
++        HVF_STAT(wfi_ipi);
+         hvf_wait_for_ipi(cpu, NULL);
+         return;
+     }
+@@ -1841,6 +1950,7 @@
+ 
+     ticks_to_sleep = cval - hvf_vtimer_val();
+     if (ticks_to_sleep < 0) {
++        HVF_STAT(wfi_past);
+         return;
+     }
+ 
+@@ -1855,9 +1965,11 @@
+      * Measurements on M1 show the sweet spot to be ~2ms.
+      */
+     if (!seconds && nanos < (2 * SCALE_MS)) {
++        HVF_STAT(wfi_short);
+         return;
+     }
+ 
++    HVF_STAT(wfi_sleep);
+     ts = (struct timespec) { seconds, nanos };
+     hvf_wait_for_ipi(cpu, &ts);
+ }
+@@ -1888,6 +2000,48 @@
+     }
+ }
+ 
++/*
++ * 不拿 BQL 就能处理完的退出。目前只有读 PMCCNTR_EL0。
++ *
++ * Windows on Arm 每次线程切换、每个中断都读周期计数器。同花顺这类负载下实测每秒 50 万次以上,
++ * 占全部退出的七成多;原路径每次都要抢 BQL,4 个 vCPU 光排队就耗掉两成多时间。
++ * 读不出结果也不能让它不陷入:Hypervisor.framework 不直通 PMU,而 -cpu pmu=off 时
++ * Windows 启动管理器照样读 PMU 寄存器、吃到 UNDEF 就崩。见 docs/PERFORMANCE.md。
++ *
++ * 处理完返回 true,调用方不拿锁直接再进 guest。别的都返回 false 走原路径,包括:
++ * 被踢(暂停、run_on_cpu、中断线变化都靠踢)、vtimer 事件、单步调试、
++ * vtimer 已屏蔽等着同步,以及 pmccntr_read_nolock 不支持的计数器配置。
++ */
++static bool hvf_fast_exit(CPUState *cpu)
++{
++    hv_vcpu_exit_t *e = cpu->accel->exit;
++    uint64_t syndrome = e->exception.syndrome;
++    uint64_t val, pc;
++    uint32_t rt;
++
++    if (e->reason != HV_EXIT_REASON_EXCEPTION ||
++        syn_get_ec(syndrome) != EC_SYSTEMREGISTERTRAP ||
++        !(syndrome & 1) ||
++        (syndrome & SYSREG_MASK) != SYSREG_PMCCNTR_EL0 ||
++        cpu->singlestep_enabled || cpu->accel->vtimer_masked) {
++        return false;
++    }
++    if (!pmccntr_read_nolock(&ARM_CPU(cpu)->env, &val)) {
++        return false;
++    }
++
++    rt = (syndrome >> 5) & 0x1f;
++    if (rt < 31) {
++        assert_hvf_ok(hv_vcpu_set_reg(cpu->accel->fd, HV_REG_X0 + rt, val));
++    }
++    assert_hvf_ok(hv_vcpu_get_reg(cpu->accel->fd, HV_REG_PC, &pc));
++    assert_hvf_ok(hv_vcpu_set_reg(cpu->accel->fd, HV_REG_PC, pc + 4));
++
++    /* 原路径每次进 guest 前都按 interrupt_request 重新挂一次中断,这里照做 */
++    hvf_inject_interrupts(cpu);
++    return true;
++}
++
+ int hvf_vcpu_exec(CPUState *cpu)
+ {
+     ARMCPU *arm_cpu = ARM_CPU(cpu);
+@@ -1908,8 +2062,26 @@
+ 
+     flush_cpu_state(cpu);
+ 
++    bool stats = hvf_stats_enabled();
++    uint64_t st0 = 0, st1 = 0, fast_n = 0, fast_guest = 0;
++
+     bql_unlock();
+-    assert_hvf_ok(hv_vcpu_run(cpu->accel->fd));
++    for (;;) {
++        if (stats) {
++            st0 = hvf_stats_now();
++        }
++        assert_hvf_ok(hv_vcpu_run(cpu->accel->fd));
++        if (stats) {
++            st1 = hvf_stats_now();
++        }
++        if (!hvf_fast_exit(cpu)) {
++            break;
++        }
++        if (stats) {
++            fast_n++;
++            fast_guest += st1 - st0;
++        }
++    }
+ 
+     /* handle VMEXIT */
+     uint64_t exit_reason = hvf_exit->reason;
+@@ -1918,16 +2090,26 @@
+ 
+     ret = 0;
+     bql_lock();
++    if (stats) {
++        uint64_t st2 = hvf_stats_now();
++        hvf_stats.ns_guest += st1 - st0 + fast_guest;
++        hvf_stats.ns_bql += st2 - st1;
++        hvf_stats.exits += 1 + fast_n;
++        hvf_stats.pmu_fast += fast_n;
++        hvf_stats_tick(st2);
++    }
+     switch (exit_reason) {
+     case HV_EXIT_REASON_EXCEPTION:
+         /* This is the main one, handle below. */
+         break;
+     case HV_EXIT_REASON_VTIMER_ACTIVATED:
++        HVF_STAT(vtimer);
+         qemu_set_irq(arm_cpu->gt_timer_outputs[GTIMER_VIRT], 1);
+         cpu->accel->vtimer_masked = true;
+         return 0;
+     case HV_EXIT_REASON_CANCELED:
+         /* we got kicked, no exit to process */
++        HVF_STAT(kick);
+         return 0;
+     default:
+         g_assert_not_reached();
+@@ -1990,6 +2172,8 @@
+         uint32_t cm = (syndrome >> 8) & 0x1;
+         uint64_t val = 0;
+ 
++        HVF_STAT(mmio);
++
+         trace_hvf_data_abort(env->pc, hvf_exit->exception.virtual_address,
+                              hvf_exit->exception.physical_address, isv,
+                              iswrite, s1ptw, len, srt);
+@@ -2027,6 +2211,10 @@
+         uint64_t val;
+         int sysreg_ret = 0;
+ 
++        if (stats) {
++            hvf_stats_sysreg(reg);
++        }
++
+         if (isread) {
+             sysreg_ret = hvf_sysreg_read(cpu, reg, &val);
+             if (!sysreg_ret) {
+@@ -2051,9 +2239,12 @@
+         advance_pc = true;
+         if (!(syndrome & WFX_IS_WFE)) {
+             hvf_wfi(cpu);
++        } else {
++            HVF_STAT(wfe);
+         }
+         break;
+     case EC_AA64_HVC:
++        HVF_STAT(psci);
+         cpu_synchronize_state(cpu);
+         if (arm_cpu->psci_conduit == QEMU_PSCI_CONDUIT_HVC) {
+             if (!hvf_handle_psci_call(cpu)) {
+@@ -2067,6 +2258,7 @@
+         }
+         break;
+     case EC_AA64_SMC:
++        HVF_STAT(psci);
+         cpu_synchronize_state(cpu);
+         if (arm_cpu->psci_conduit == QEMU_PSCI_CONDUIT_SMC) {
+             advance_pc = true;
+@@ -2082,6 +2274,7 @@
+         }
+         break;
+     default:
++        HVF_STAT(other);
+         cpu_synchronize_state(cpu);
+         trace_hvf_exit(syndrome, ec, env->pc);
+         error_report("0x%llx: unhandled exception ec=0x%x", env->pc, ec);
+--- a/target/arm/helper.c	2025-05-28 15:05:46
++++ b/target/arm/helper.c	2026-09-13 21:12:24
+@@ -1165,7 +1165,43 @@
+             prev_cycles /= 64;
+         }
+         env->cp15.c15_ccnt_delta = prev_cycles - env->cp15.c15_ccnt;
++    }
++}
++
++/*
++ * 不拿 BQL 读 PMCCNTR,给 hvf 的快路径用。
++ *
++ * Windows on Arm 每次线程切换、每个中断都读周期计数器,实测每秒 50 万次以上。
++ * hvf 下这些读全部陷入 QEMU,原路径要先抢 BQL,4 个 vCPU 光排队就耗掉两成多时间。
++ *
++ * 结果与原路径 pmu_op_start + 读 c15_ccnt + pmu_op_finish 相同,但不改任何状态:
++ * 计数器开着时是(按需 64 分频后的)时钟减 c15_ccnt_delta,关着时就是 c15_ccnt。
++ * 溢出由上一次慢路径排好的 pmu_timer 负责,读不读都不影响。
++ * 这些字段只有本 vCPU 线程会改(PMU 寄存器的写走慢路径,也在本线程),所以不需要锁。
++ *
++ * 前提是「开没开」不会在两次写 PMU 寄存器之间自己变:没有 EL2/EL3,
++ * 且 PMCCFILTR 对 EL0 和 EL1 的过滤一致(P == U)。不满足就返回 false,调用方退回原路径。
++ */
++bool pmccntr_read_nolock(CPUARMState *env, uint64_t *val)
++{
++    uint64_t filter = env->cp15.pmccfiltr_el0;
++
++    if (!arm_feature(env, ARM_FEATURE_PMU) ||
++        arm_feature(env, ARM_FEATURE_EL2) ||
++        arm_feature(env, ARM_FEATURE_EL3) ||
++        !(filter & PMXEVTYPER_P) != !(filter & PMXEVTYPER_U)) {
++        return false;
+     }
++    if (pmu_counter_enabled(env, 31)) {
++        uint64_t eff_cycles = cycles_get_count(env);
++        if (pmccntr_clockdiv_enabled(env)) {
++            eff_cycles /= 64;
++        }
++        *val = eff_cycles - env->cp15.c15_ccnt_delta;
++    } else {
++        *val = env->cp15.c15_ccnt;
++    }
++    return true;
+ }
+ 
+ static void pmevcntr_op_start(CPUARMState *env, uint8_t counter)
+--- a/target/arm/internals.h	2025-05-28 15:05:46
++++ b/target/arm/internals.h	2026-09-13 21:09:03
+@@ -1782,6 +1782,9 @@
+ #define PMXEVTYPER_NSU        0x10000000
+ #define PMXEVTYPER_NSH        0x08000000
+ #define PMXEVTYPER_M          0x04000000
++
++/* 不拿 BQL 读 PMCCNTR,给 hvf 的快路径用。见 helper.c */
++bool pmccntr_read_nolock(CPUARMState *env, uint64_t *val);
+ #define PMXEVTYPER_MT         0x02000000
+ #define PMXEVTYPER_EVTCOUNT   0x0000ffff
+ #define PMXEVTYPER_MASK       (PMXEVTYPER_P | PMXEVTYPER_U | PMXEVTYPER_NSK | \

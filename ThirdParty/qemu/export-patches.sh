@@ -21,7 +21,7 @@ OUT="$ROOT/patches"
 [ -f "$TARBALL" ] || { echo "没有原始 tarball $TARBALL"; exit 1; }
 
 # 补丁顺序即应用顺序
-GROUPS_ORDER="0001-macos-display-backend 0002-hvf-pmu-migration 0003-virtio-gpu-ctrl-queue"
+GROUPS_ORDER="0001-macos-display-backend 0002-hvf-pmu-migration 0003-virtio-gpu-ctrl-queue 0004-hvf-pmccntr-fast-path"
 
 group_files() {
   case "$1" in
@@ -31,6 +31,8 @@ group_files() {
     0002-hvf-pmu-migration)          echo "target/arm/machine.c" ;;
     # 2D virtio-gpu 控制队列 64 → 256。viogpudo 挂 5K 帧缓冲的内存要 59 个描述符,64 塞不下。见 docs/DISPLAY.md。
     0003-virtio-gpu-ctrl-queue)      echo "hw/display/virtio-gpu-base.c" ;;
+    # Windows 每秒几十万次读 PMCCNTR,不拿 BQL 处理;外加 VIRTUALLY_HVF_STATS 退出统计。见 docs/PERFORMANCE.md。
+    0004-hvf-pmccntr-fast-path)      echo "target/arm/hvf/hvf.c target/arm/helper.c target/arm/internals.h" ;;
     *) echo "" ;;
   esac
 }
