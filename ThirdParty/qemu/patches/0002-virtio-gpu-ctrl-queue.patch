@@ -1,6 +1,6 @@
---- a/hw/display/virtio-gpu-base.c	2025-05-28 15:05:46
-+++ b/hw/display/virtio-gpu-base.c	2026-09-13 01:12:19
-@@ -198,7 +198,13 @@
+--- a/hw/display/virtio-gpu-base.c	2026-08-27 05:23:31
++++ b/hw/display/virtio-gpu-base.c	2026-09-13 22:57:55
+@@ -241,7 +241,13 @@
          virtio_add_queue(vdev, 256, ctrl_cb);
          virtio_add_queue(vdev, 16, cursor_cb);
      } else {

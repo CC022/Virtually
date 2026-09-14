@@ -14,6 +14,8 @@ struct QemuCommandTests {
 
         expect(args.contains("-accel") == false, "加速器应写在 -machine 里,而非独立 -accel")
         expect(value(after: "-machine", in: args)?.contains("accel=hvf") == true, "启用 HVF")
+        expect(value(after: "-machine", in: args)?.contains("kernel-irqchip=on") == true,
+               "显式使用内核态 GIC,不依赖机器类型默认值")
         expectEqual(value(after: "-smp", in: args), "3", "CPU 数进入 -smp")
         expectEqual(value(after: "-m", in: args), "4096", "内存进入 -m")
 

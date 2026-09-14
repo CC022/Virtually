@@ -26,6 +26,8 @@ ThirdParty/virtio-win/fetch.sh    # Windows 客户机的 virtio 驱动(下载 83
 ```
 
 源码包放在 `ThirdParty/qemu/src/`,virtio-win ISO 放在 `ThirdParty/virtio-win/src/`,已经在的就不再下载。
+QEMU 的版本与源码包 SHA256 固定在 `build.sh` 里(现在是 11.1.1);换版本时构建目录会自动清掉重新 configure,
+补丁要在新源码树上重做再 `export-patches.sh`。
 virtio 驱动是 Windows 内核驱动,要 WDK 编译加微软签名,macOS 上做不了,所以用官方发布的已签名二进制,
 版本与 SHA256 固定在 `fetch.sh` 里。
 

@@ -1,0 +1,251 @@
+--- a/target/arm/hvf/hvf.c	2026-08-27 05:23:32
++++ b/target/arm/hvf/hvf.c	2026-09-14 01:24:09
+@@ -2202,8 +2202,110 @@
+      * offset that we define. Add our own offset on top.
+      */
+     return mach_absolute_time() - hvf_state->vtimer_offset;
++}
++
++/*
++ * 退出统计(环境变量 VIRTUALLY_HVF_STATS=1 开启):每秒往 stderr(即 QEMU 日志)打一行,
++ * 按类别列出每秒退出次数,以及 vCPU 时间分给了「跑 guest / 等 BQL / WFI 停机 / 其余」各多少。
++ * 采样器看不出哪类退出贵,这个能:QEMU 10.0 用户态 GIC 时 Windows 每秒 50 万次以上读 PMCCNTR、
++ * 5 万次 IPI 就是靠它看出来的。开 kernel-irqchip 后应只剩 MMIO。
++ *
++ * 计数都在 BQL 下改。不开的时候每次退出只多一次分支。
++ */
++typedef struct HVFStats {
++    uint64_t exits, vtimer, kick, mmio, psci, wfe, other;
++    uint64_t wfi_halt, wfi_nohalt;
++    uint64_t icc_iar, icc_eoi, icc_dir, icc_sgi, icc_other, pmu, sysreg_other;
++    uint64_t ns_guest, ns_bql, ns_halt;
++    uint32_t other_reg;
++    uint64_t last;
++} HVFStats;
++static HVFStats hvf_stats;
++static int hvf_stats_on = -1;
++/* 本 vCPU 线程上一次因 WFI 停机的时刻,回到 hvf_arch_vcpu_exec 时结算 */
++static __thread uint64_t hvf_stats_halt_since;
++
++#define HVF_STAT(field) do {                    \
++        if (unlikely(hvf_stats_on > 0)) {       \
++            hvf_stats.field++;                  \
++        }                                       \
++    } while (0)
++
++static inline bool hvf_stats_enabled(void)
++{
++    if (unlikely(hvf_stats_on < 0)) {
++        hvf_stats_on = getenv("VIRTUALLY_HVF_STATS") != NULL;
++    }
++    return hvf_stats_on > 0;
++}
++
++static inline uint64_t hvf_stats_now(void)
++{
++    return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
++}
++
++static void hvf_stats_tick(uint64_t now)
++{
++    HVFStats *s = &hvf_stats;
++    CPUState *c;
++    int n = 0;
++    uint64_t dt;
++    double per, pct;
++
++    if (!s->last) {
++        s->last = now;
++        return;
++    }
++    dt = now - s->last;
++    if (dt < NANOSECONDS_PER_SECOND) {
++        return;
++    }
++    CPU_FOREACH(c) {
++        n++;
++    }
++    per = (double)NANOSECONDS_PER_SECOND / dt;
++    pct = 100.0 / ((double)dt * n);
++    fprintf(stderr,
++            "[hvf] exits=%.0f vtimer=%.0f kick=%.0f wfi(halt=%.0f nohalt=%.0f) "
++            "wfe=%.0f icc(iar=%.0f eoi=%.0f dir=%.0f sgi=%.0f other=%.0f) pmu=%.0f "
++            "sysreg=%.0f(last 0x%08x) mmio=%.0f psci=%.0f other=%.0f | "
++            "guest=%.1f%% bql=%.1f%% halt=%.1f%% rest=%.1f%%\n",
++            s->exits * per, s->vtimer * per, s->kick * per,
++            s->wfi_halt * per, s->wfi_nohalt * per, s->wfe * per,
++            s->icc_iar * per, s->icc_eoi * per, s->icc_dir * per,
++            s->icc_sgi * per, s->icc_other * per, s->pmu * per,
++            s->sysreg_other * per, s->other_reg, s->mmio * per, s->psci * per,
++            s->other * per,
++            s->ns_guest * pct, s->ns_bql * pct, s->ns_halt * pct,
++            100.0 - (s->ns_guest + s->ns_bql + s->ns_halt) * pct);
++    memset(s, 0, sizeof(*s));
++    s->last = now;
+ }
+ 
++static void hvf_stats_sysreg(uint32_t reg)
++{
++    if (reg == SYSREG_ICC_IAR1_EL1 || reg == SYSREG_ICC_IAR0_EL1) {
++        hvf_stats.icc_iar++;
++    } else if (reg == SYSREG_ICC_EOIR1_EL1 || reg == SYSREG_ICC_EOIR0_EL1) {
++        hvf_stats.icc_eoi++;
++    } else if (reg == SYSREG_ICC_DIR_EL1) {
++        hvf_stats.icc_dir++;
++    } else if (reg == SYSREG_ICC_SGI1R_EL1 || reg == SYSREG_ICC_SGI0R_EL1 ||
++               reg == SYSREG_ICC_ASGI1R_EL1) {
++        hvf_stats.icc_sgi++;
++    } else if (SYSREG_OP0(reg) == 3 && SYSREG_OP1(reg) == 0 &&
++               (SYSREG_CRN(reg) == 12 ||
++                (SYSREG_CRN(reg) == 4 && SYSREG_CRM(reg) == 6))) {
++        hvf_stats.icc_other++;
++    } else if (SYSREG_OP0(reg) == 3 && SYSREG_OP1(reg) == 3 &&
++               SYSREG_CRN(reg) == 9) {
++        hvf_stats.pmu++;
++    } else {
++        hvf_stats.sysreg_other++;
++        hvf_stats.other_reg = reg;
++    }
++}
++
+ static void hvf_wfi_timer_cb(void *opaque)
+ {
+     CPUState *cpu = opaque;
+@@ -2267,6 +2369,7 @@
+          * Don't bother to go into our "low power state" if
+          * we would just wake up immediately.
+          */
++        HVF_STAT(wfi_nohalt);
+         return 0;
+     }
+ 
+@@ -2288,10 +2391,12 @@
+ 
+         if (hvf_arm_wfi_timer(cpu, ctl, cval) < 0) {
+             /* vtimer already expired, don't halt */
++            HVF_STAT(wfi_nohalt);
+             return 0;
+         }
+     }
+ 
++    HVF_STAT(wfi_halt);
+     cpu->halted = 1;
+     return EXCP_HLT;
+ }
+@@ -2391,6 +2496,8 @@
+         uint64_t ipa = excp->physical_address;
+         AddressSpace *as = cpu_get_address_space(cpu, ARMASIdx_NS);
+ 
++        HVF_STAT(mmio);
++
+         trace_hvf_data_abort(excp->virtual_address, ipa, isv,
+                              iswrite, s1ptw, len, srt);
+ 
+@@ -2460,6 +2567,10 @@
+         uint64_t val;
+         int sysreg_ret = 0;
+ 
++        if (hvf_stats_enabled()) {
++            hvf_stats_sysreg(reg);
++        }
++
+         if (isread) {
+             sysreg_ret = hvf_sysreg_read(cpu, reg, &val);
+             if (!sysreg_ret) {
+@@ -2484,9 +2595,12 @@
+         advance_pc = true;
+         if (!(syndrome & WFX_IS_WFE)) {
+             ret = hvf_wfi(cpu);
++        } else {
++            HVF_STAT(wfe);
+         }
+         break;
+     case EC_AA64_HVC:
++        HVF_STAT(psci);
+         cpu_synchronize_state(cpu);
+         if (arm_cpu->psci_conduit == QEMU_PSCI_CONDUIT_HVC) {
+             /* Do NOT advance $pc for HVC */
+@@ -2501,6 +2615,7 @@
+         }
+         break;
+     case EC_AA64_SMC:
++        HVF_STAT(psci);
+         cpu_synchronize_state(cpu);
+         if (arm_cpu->psci_conduit == QEMU_PSCI_CONDUIT_SMC) {
+             /* Secure Monitor Call exception, we need to advance $pc */
+@@ -2528,6 +2643,7 @@
+         /* fall through */
+     }
+     default:
++        HVF_STAT(other);
+         cpu_synchronize_state(cpu);
+         trace_hvf_exit(syndrome, ec, env->pc);
+         error_report("0x%llx: unhandled exception ec=0x%x", env->pc, ec);
+@@ -2569,11 +2685,13 @@
+         break;
+     case HV_EXIT_REASON_VTIMER_ACTIVATED:
+         assert(!hvf_irqchip_in_kernel());
++        HVF_STAT(vtimer);
+         qemu_set_irq(arm_cpu->gt_timer_outputs[GTIMER_VIRT], 1);
+         cpu->accel->vtimer_masked = true;
+         break;
+     case HV_EXIT_REASON_CANCELED:
+         /* we got kicked, no exit to process */
++        HVF_STAT(kick);
+         ret = -1;
+         break;
+     default:
+@@ -2587,9 +2705,19 @@
+ {
+     int ret;
+     hv_return_t r;
++    bool stats = hvf_stats_enabled();
++    uint64_t st0 = 0, st1 = 0;
+ 
++    if (stats && hvf_stats_halt_since) {
++        hvf_stats.ns_halt += hvf_stats_now() - hvf_stats_halt_since;
++        hvf_stats_halt_since = 0;
++    }
++
+     if (cpu->halted) {
+         if (!cpu_has_work(cpu)) {
++            if (stats) {
++                hvf_stats_halt_since = hvf_stats_now();
++            }
+             return EXCP_HLT;
+         }
+         cpu->halted = 0;
+@@ -2607,10 +2735,23 @@
+         }
+ 
+         bql_unlock();
++        if (stats) {
++            st0 = hvf_stats_now();
++        }
+         cpu_exec_start(cpu);
+         r = hv_vcpu_run(cpu->accel->fd);
+         cpu_exec_end(cpu);
++        if (stats) {
++            st1 = hvf_stats_now();
++        }
+         bql_lock();
++        if (stats) {
++            uint64_t st2 = hvf_stats_now();
++            hvf_stats.ns_guest += st1 - st0;
++            hvf_stats.ns_bql += st2 - st1;
++            hvf_stats.exits++;
++            hvf_stats_tick(st2);
++        }
+         switch (r) {
+         case HV_SUCCESS:
+             ret = hvf_handle_vmexit(cpu, cpu->accel->exit);
+@@ -2623,6 +2764,9 @@
+         }
+     } while (ret == 0);
+ 
++    if (stats && ret == EXCP_HLT) {
++        hvf_stats_halt_since = hvf_stats_now();
++    }
+     return ret;
+ }
+ 

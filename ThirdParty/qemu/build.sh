@@ -13,7 +13,9 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 SYSROOT="$ROOT/sysroot"
 SRC="$ROOT/src"
 BUILD="$ROOT/build"
-QEMU_VER=10.0.2
+QEMU_VER=11.1.1
+# 官方只发 GPG 签名,本机没有 gpg。这个值是第一次下载时算出来写死的,换版本要一起改
+QEMU_SHA256=079ffbff8a7111bbc89022107cbabf3bbfd614d5fc9d7cc675991196aca12482
 JOBS=$(sysctl -n hw.ncpu)
 
 # SDK 与部署目标,原因见 env.sh
@@ -22,17 +24,60 @@ source "$ROOT/env.sh"
 export PATH="$HOME/Library/Python/3.9/bin:$SYSROOT/bin:$PATH"
 export PKG_CONFIG_PATH="$SYSROOT/lib/pkgconfig"
 
-# QEMU 的 mkvenv 在 Python 3.9 上需要这几个包(3.11+ 自带 tomllib 则不需要 tomli)
-python3 -c "import distlib" 2>/dev/null || pip3 install --user --quiet distlib
-python3 -c "import tomli" 2>/dev/null || pip3 install --user --quiet tomli
+# QEMU 的 mkvenv 在 Python 3.9 上需要 tomli 与 distlib(3.11+ 自带 tomllib 则不需要 tomli)。
+# 放进项目自己的目录,configure 时经 PYTHONPATH 给它 —— 原因见下面 configure 那段
+PYDEPS="$SRC/pydeps"
+USERSITE="$(python3 -c 'import site; print(site.getusersitepackages())')"
+for m in tomli distlib; do
+    [ -d "$PYDEPS/$m" ] && continue
+    mkdir -p "$PYDEPS"
+    if [ -d "$USERSITE/$m" ]; then
+        cp -R "$USERSITE/$m" "$PYDEPS/"
+    else
+        /usr/bin/python3 -s -m pip install --quiet --target "$PYDEPS" "$m"
+    fi
+done
 
 mkdir -p "$SRC" "$BUILD"
 
+# 源码包按版本命名。以前固定叫 qemu.tar.xz,换版本时旧包还在就会解出旧版本的目录
+TARBALL="$SRC/qemu-$QEMU_VER.tar.xz"
 if [ ! -d "$SRC/qemu-$QEMU_VER" ]; then
-    [ -f "$SRC/qemu.tar.xz" ] || curl -fsSL --max-time 900 \
-        -o "$SRC/qemu.tar.xz" "https://download.qemu.org/qemu-$QEMU_VER.tar.xz"
+    if [ ! -f "$TARBALL" ]; then
+        echo "==> 下载 QEMU $QEMU_VER"
+        curl -fL --max-time 1200 -o "$TARBALL.part" "https://download.qemu.org/qemu-$QEMU_VER.tar.xz"
+        mv "$TARBALL.part" "$TARBALL"
+    fi
+    actual="$(shasum -a 256 "$TARBALL" | awk '{print $1}')"
+    if [ "$actual" != "$QEMU_SHA256" ]; then
+        echo "!! $TARBALL 的 SHA256 不符:期望 $QEMU_SHA256,实际 $actual。删掉它重新下载"
+        exit 1
+    fi
     echo "==> 解压 QEMU $QEMU_VER"
-    (cd "$SRC" && tar xf qemu.tar.xz)
+    (cd "$SRC" && tar xf "$TARBALL")
+fi
+
+# libslirp 是 meson 在 configure 时按 subprojects/slirp.wrap 从 gitlab 克隆的。
+# 别的版本的源码树里已经有同一个 revision 的就直接拷,省一次网络下载
+SLIRP="$SRC/qemu-$QEMU_VER/subprojects/slirp"
+if [ ! -d "$SLIRP" ]; then
+    want="$(awk -F' = ' '/^revision/{print $2}' "$SRC/qemu-$QEMU_VER/subprojects/slirp.wrap")"
+    for other in "$SRC"/qemu-*/subprojects/slirp; do
+        [ -d "$other" ] || continue
+        if [ "$(awk -F' = ' '/^revision/{print $2}' "$(dirname "$other")/slirp.wrap")" = "$want" ]; then
+            echo "==> 沿用 $other(libslirp $want)"
+            cp -R "$other" "$SLIRP"
+            break
+        fi
+    done
+fi
+
+# 构建目录是按某一份源码树 configure 的。换了版本还沿用,就会拿旧源码的配置编,
+# 所以记下版本,对不上就整个清掉重新 configure
+if [ -f "$BUILD/build.ninja" ] && [ "$(cat "$BUILD/.qemu-version" 2>/dev/null)" != "$QEMU_VER" ]; then
+    echo "==> 构建目录不是 $QEMU_VER 的,清掉重新 configure"
+    rm -rf "$BUILD"
+    mkdir -p "$BUILD"
 fi
 
 # 应用我们的补丁。patches/ 是唯一真相:app 依赖的 ui/macos.c 整个后端就在
@@ -76,6 +121,13 @@ if [ ! -f "$BUILD/build.ninja" ] || [ "${RECONFIGURE:-0}" = "1" ]; then
     cd "$BUILD"
     # 已存在的构建目录要带 --reconfigure,否则 meson 会拒绝
     [ -f "$BUILD/build.ninja" ] && export QEMU_CONFIGURE_EXTRA="--reconfigure"
+    echo "$QEMU_VER" > "$BUILD/.qemu-version"
+    # QEMU 11 的 configure 会把源码里的 python/ 以 editable 方式装进 pyvenv。
+    # 用户目录里要是装过新 pip(≥ 25.3,去掉了 setup.py develop 的兜底),而系统 Python 3.9
+    # 自带的 setuptools 只有 58(没有 PEP 660 的 build_editable),两者凑在一起就装不上
+    # (实测:「missing the 'build_editable' hook」)。所以这一步屏蔽用户目录,
+    # 让 pyvenv 用系统自带的 pip 21;要用的 meson、pycotap、qemu.qmp 都在源码包的 python/wheels 里,不联网。
+    PYTHONNOUSERSITE=1 PYTHONPATH="$PYDEPS" \
     "$SRC/qemu-$QEMU_VER/configure" \
         --target-list=aarch64-softmmu \
         --prefix="$SYSROOT" \

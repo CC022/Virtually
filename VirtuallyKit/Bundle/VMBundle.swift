@@ -483,7 +483,11 @@ public struct QemuCommand {
         let s = bundle.settings
         var args: [String] = [
             "-L", firmwareDir.path,
-            "-machine", "virt,accel=hvf,gic-version=3,highmem=on",
+            // kernel-irqchip=on:用 Hypervisor.framework 的内核态 GIC(QEMU 11.1 起支持,virt-11.1 默认就开)。
+            // 中断确认、IPI、虚拟定时器、PMU 周期计数器都不再陷入 QEMU —— 以前 Windows 每秒几十万次
+            // 这类退出,每次都要抢 BQL。显式写出来,不依赖机器类型的默认值。
+            // 这时 MSI 走 GICv2m(ITS 不能和它一起用),PMU 状态进不了快照,见 docs/SNAPSHOTS.md。
+            "-machine", "virt,accel=hvf,gic-version=3,highmem=on,kernel-irqchip=on",
             "-cpu", "host",
             "-smp", "\(s.cpuCount)",
             "-m", "\(s.memoryMB)",

@@ -32,7 +32,7 @@ Scripts/ctl.sh stop              # 先挂起再退出
 - 测试 action 会顺带构建 `Virtually.app`,所以跑测试同样需要 QEMU 已经编好。
 - 签名身份不进仓库:`Config/Project.xcconfig` 默认 ad-hoc,本机的 Team ID 写在被忽略的 `Config/Local.xcconfig`。不要把 `DEVELOPMENT_TEAM` 写回 `project.pbxproj`。
 - `env.sh` 把第三方库固定用 macOS 26 SDK 编:更新的 SDK 编出的 glib 会调用本机没有的 `pipe2`,QEMU 启动即崩。
-- 改了 `ThirdParty/qemu/src/qemu-10.0.2/` 里的源码,必须跑 `ThirdParty/qemu/export-patches.sh` 再提交 `patches/`。
+- 改了 `ThirdParty/qemu/src/qemu-11.1.1/` 里的源码,必须跑 `ThirdParty/qemu/export-patches.sh` 再提交 `patches/`。
   `src/` 不进 git,`patches/` 是唯一真相;新改的文件要先加进脚本里的 `group_files`。
 - 工程用 file-system-synchronized groups:在 `Virtually/`、`VirtuallyKit/`、`VirtuallyCLI/`、`VirtuallyKitTests/`
   下新建 Swift 文件会自动进对应 target,不用改 `project.pbxproj`。

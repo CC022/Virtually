@@ -1,6 +1,6 @@
---- /dev/null	2026-09-12 14:22:34
-+++ b/ui/macos.c	2026-09-12 14:21:50
-@@ -0,0 +1,446 @@
+--- /dev/null	2026-09-14 01:25:26
++++ b/ui/macos.c	2026-09-13 22:58:33
+@@ -0,0 +1,451 @@
 +/*
 + * QEMU macOS 嵌入式显示后端 —— 供 Virtually 宿主应用使用
 + *
@@ -242,7 +242,7 @@
 +
 +static void macos_refresh(DisplayChangeListener *dcl)
 +{
-+    graphic_hw_update(dcl->con);
++    qemu_console_hw_update(dcl->con);
 +
 +    if (md->damage_pending) {
 +        macos_send_msg(MSG_DAMAGE, md->dx0, md->dy0,
@@ -327,20 +327,26 @@
 +    }
 +
 +    case MSG_KEY:
-+        qemu_input_event_send_key_qcode(con, m->a, m->b != 0);
++        /* 宿主发的是 qcode。QEMU 11 起输入核心只认 Linux 键码,
++         * send_key_qcode 随 input-legacy.c 一起删了,这里查表转一下。 */
++        if (m->a > 0 && m->a < (int32_t)qemu_input_map_qcode_to_linux_len &&
++            qemu_input_map_qcode_to_linux[m->a]) {
++            qemu_input_event_send_key_linux(con, qemu_input_map_qcode_to_linux[m->a],
++                                            m->b != 0);
++        }
 +        break;
 +
 +    case MSG_UI_INFO: {
 +        QemuUIInfo info;
 +        int rc;
-+        /* ramfb 不支持 ui_info,而 dpy_get_ui_info 对不支持的 console 是 assert ——
++        /* ramfb 不支持 ui_info,而 qemu_console_get_ui_info 对不支持的 console 是 assert ——
 +         * 安装期(ramfb)拖一下窗口整个 QEMU 就 abort,装到最后一步弹出「意外退出」。
 +         * 宿主侧现在也不会在 ramfb 下发这条,这里再挡一次以防万一。 */
-+        if (!dpy_ui_info_supported(con)) {
++        if (!qemu_console_ui_info_supported(con)) {
 +            fprintf(stderr, "[macos] ui_info %dx%d 忽略:当前显示设备不支持\n", m->a, m->b);
 +            break;
 +        }
-+        info = *dpy_get_ui_info(con);
++        info = *qemu_console_get_ui_info(con);
 +        info.width = m->a;
 +        info.height = m->b;
 +        /* delay=false:宿主侧已经自己做了防抖(拖拽停稳 200ms 才发一次),
@@ -352,9 +358,9 @@
 +         * 注意 width/height 必须非零:virtio_gpu_ui_info 里
 +         * `if (info->width && info->height)` 为假会**关掉这个输出**,
 +         * 画面变成 "Display output is not active"。 */
-+        rc = dpy_set_ui_info(con, &info, false);
++        rc = qemu_console_set_ui_info(con, &info, false);
 +        fprintf(stderr, "[macos] ui_info %dx%d supported=%d rc=%d\n",
-+                m->a, m->b, dpy_ui_info_supported(con), rc);
++                m->a, m->b, qemu_console_ui_info_supported(con), rc);
 +        break;
 +    }
 +
@@ -424,13 +430,12 @@
 +        exit(1);
 +    }
 +
-+    md->dcl.con = qemu_console_lookup_default();
-+    md->dcl.ops = &macos_dcl_ops;
 +    /* 刷新节奏:QEMU 侧给足余量(~125Hz),真正的呈现节奏由宿主的
 +     * CADisplayLink 决定。比改全局常量 GUI_REFRESH_INTERVAL_DEFAULT 干净,
-+     * 因为它只影响本后端。 */
++     * 因为它只影响本后端。要在注册之前设好:注册时按它排第一次刷新。 */
 +    md->dcl.update_interval = 8;
-+    register_displaychangelistener(&md->dcl);
++    qemu_console_register_listener(qemu_console_lookup_default(), &md->dcl,
++                                   &macos_dcl_ops);
 +
 +    qemu_thread_create(&thread, "macos-input", macos_reader_thread,
 +                       NULL, QEMU_THREAD_DETACHED);
@@ -447,9 +452,9 @@
 +}
 +
 +type_init(register_macos);
---- a/ui/meson.build	2025-05-28 15:05:47
-+++ b/ui/meson.build	2026-09-07 23:41:23
-@@ -30,6 +30,7 @@
+--- a/ui/meson.build	2026-08-27 05:23:32
++++ b/ui/meson.build	2026-09-13 22:57:55
+@@ -71,6 +71,7 @@
    system_ss.add(files('input-linux.c', 'udmabuf.c'))
  endif
  system_ss.add(when: cocoa, if_true: files('cocoa.m'))
@@ -457,9 +462,9 @@
  
  vnc_ss = ss.source_set()
  vnc_ss.add(files(
---- a/qapi/ui.json	2025-05-28 15:05:46
-+++ b/qapi/ui.json	2026-09-07 23:41:45
-@@ -1448,6 +1448,24 @@
+--- a/qapi/ui.json	2026-08-27 05:23:32
++++ b/qapi/ui.json	2026-09-13 22:57:55
+@@ -1460,6 +1460,24 @@
    } }
  
  ##
@@ -484,7 +489,7 @@
  # @HotKeyMod:
  #
  # Set of modifier keys that need to be held for shortcut key actions.
-@@ -1499,6 +1517,9 @@
+@@ -1511,6 +1529,9 @@
  #
  # @cocoa: The Cocoa user interface.
  #
@@ -494,7 +499,7 @@
  # @spice-app: Set up a Spice server and run the default associated
  #     application to connect to it.  The server will redirect the
  #     serial console and QEMU monitors.  (Since 4.0)
-@@ -1516,6 +1537,7 @@
+@@ -1528,6 +1549,7 @@
      { 'name': 'egl-headless', 'if': 'CONFIG_OPENGL' },
      { 'name': 'curses', 'if': 'CONFIG_CURSES' },
      { 'name': 'cocoa', 'if': 'CONFIG_COCOA' },
@@ -502,7 +507,7 @@
      { 'name': 'spice-app', 'if': 'CONFIG_SPICE' },
      { 'name': 'dbus', 'if': 'CONFIG_DBUS_DISPLAY' }
    ]
-@@ -1551,6 +1573,7 @@
+@@ -1563,6 +1585,7 @@
    'data'    : {
        'gtk': { 'type': 'DisplayGTK', 'if': 'CONFIG_GTK' },
        'cocoa': { 'type': 'DisplayCocoa', 'if': 'CONFIG_COCOA' },

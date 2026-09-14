@@ -52,31 +52,27 @@ qemu_loadvm_state()        ← 最后才读内存,这一步才会报错
 2. 万一还是失败了(指纹相同但 QEMU 仍报错),**断电**,并告诉用户磁盘停在快照那一刻,
    重新开机即可。绝不 `cont`。
 
-## hvf 下 PMU 状态原本不进快照(2026-09-13 修正)
+## hvf 下 PMU 状态不进快照
 
-**症状**:Windows 从挂起状态恢复后,点「关机」(或在开始菜单里关机),画面变成
-`Display output is not active` 就停住,QEMU 不退出,窗口也不关。冷启动后关机正常。
+**症状**(QEMU 10.0.2,GIC 在 QEMU 里模拟):Windows 从挂起恢复后点「关机」,画面变成
+`Display output is not active` 就停住,QEMU 不退出。冷启动后关机正常。
 
-**查法**:`sample` QEMU 进程。3 个 vCPU 线程一直在 `hv_vcpu_run` 里(guest 自转,不是 WFI),
-第 4 个反复陷入 `hvf_sysreg_read` 读 **PMCCNTR_EL0** —— guest 在拿 PMU 周期计数器忙等。
+**原因**:hvf 下 CPU 寄存器的迁移列表只含 Hypervisor.framework 管的寄存器,而当时 PMU 是 `hvf.c` 自己模拟的,
+状态只在 `env->cp15`。loadvm 之后 PMCR.E 回到 0,周期计数器冻住;Windows 关机最后一步拿它忙等,永远等不完。
+当时的修法是补丁把这几个 PMU 寄存器补进迁移流(`cpu/pmu-hvf` 子段)。
 
-**原因**:hvf 下 CPU 寄存器的迁移列表只含 `hvf_sreg_match` 里由 Hypervisor.framework 管的寄存器
-(`hvf_arch_init_vcpu`),而 PMU 是 `hvf.c` 自己模拟的,状态只在 `env->cp15`,不在列表里。
-loadvm 之后 PMU 回到复位值,PMCR.E 为 0,周期计数器冻住。Windows 开机时打开过它,
-关机最后一步用它等一段时间 —— 计数器不走,就永远等下去,PSCI SYSTEM_OFF 发不出来。
+**现在(QEMU 11.1.1,`kernel-irqchip=on`)**:PMU 交给 Hypervisor.framework 模拟,QEMU 不再碰 PMU 寄存器,
+那个补丁删了。框架没有 PMU 寄存器的读写接口,所以 PMU 状态依旧**进不了快照** —— 但实测框架的周期计数器
+恢复后照常在走,Windows 不会卡:
 
-**修法**:`patches/0002-hvf-pmu-migration.patch` 在 `target/arm/machine.c` 给 CPU 加子段
-`cpu/pmu-hvf`(仅 hvf),存 PMCR、PMCNTENSET、PMOVSR、PMUSERENR、PMSELR、PMINTEN、PMCCNTR、PMCCFILTR。
-子段是可选的:旧 QEMU 存的挂起状态在新 QEMU 上照样能恢复,只是 PMU 仍是复位值 ——
-那份旧状态恢复出来的 Windows 这一次关机还会卡住,强制关机一次即可。
-没有升 `fingerprintVersion`:新 QEMU 读旧快照不会失败,也不存在降级使用的场景。
-
-| 场景(Windows 11 25H2 克隆) | 结果 |
+| 场景(Windows 11 25H2 克隆,QEMU 11.1.1,内核态 GIC) | 结果 |
 |---|---|
-| 冷启动 → 电源菜单「关机」 | 16 秒 QEMU 退出 |
-| 挂起 → 恢复 → 「关机」(补丁前) | 3 分钟以上不退出,4 核满载 |
-| 挂起 → 恢复 → 「关机」(补丁后,两轮) | 两轮都是 14 秒退出,code=0,窗口自动关闭 |
-| 补丁前存的 Ubuntu 挂起状态,用补丁后的 QEMU 恢复 | 正常接着跑(uptime 延续) |
+| 恢复前,guest 里 `QueryThreadCycleTime` 空转 500ms | 约 300 万 cycles/ms |
+| 挂起 → 恢复后同样测 | 约 300 万 cycles/ms,没有冻住 |
+| 挂起 → 恢复 → guest 里关机 | 17 秒 QEMU 退出,code=0 |
+| 有名快照 存 → 恢复 → 删(同一次开机里) | 16 秒 / 6 秒 / 2 秒,之后 agent 正常 |
+
+上游 11.1.1 在 `kernel-irqchip=off` 时仍然自己模拟 PMU、仍然不存它的状态。哪天要退回 off,这个坑会回来。
 
 ## 网卡永远在场
 

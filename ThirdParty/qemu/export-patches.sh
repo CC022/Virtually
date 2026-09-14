@@ -12,27 +12,25 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-QEMU_VER=10.0.2
+QEMU_VER=11.1.1
 SRC="$ROOT/src/qemu-$QEMU_VER"
-TARBALL="$ROOT/src/qemu.tar.xz"
+TARBALL="$ROOT/src/qemu-$QEMU_VER.tar.xz"
 OUT="$ROOT/patches"
 
 [ -d "$SRC" ] || { echo "没有源码树 $SRC"; exit 1; }
 [ -f "$TARBALL" ] || { echo "没有原始 tarball $TARBALL"; exit 1; }
 
 # 补丁顺序即应用顺序
-GROUPS_ORDER="0001-macos-display-backend 0002-hvf-pmu-migration 0003-virtio-gpu-ctrl-queue 0004-hvf-pmccntr-fast-path"
+GROUPS_ORDER="0001-macos-display-backend 0002-virtio-gpu-ctrl-queue 0003-hvf-exit-stats"
 
 group_files() {
   case "$1" in
     # app 真正依赖的:-display macos 后端。共享 mmap 帧缓冲 + Unix socket 事件通道。
     0001-macos-display-backend)      echo "ui/macos.c ui/meson.build qapi/ui.json" ;;
-    # hvf 下 PMU 状态不进快照,Windows 从挂起恢复后关不了机。见 machine.c 里 vmstate_pmu_hvf 的注释。
-    0002-hvf-pmu-migration)          echo "target/arm/machine.c" ;;
     # 2D virtio-gpu 控制队列 64 → 256。viogpudo 挂 5K 帧缓冲的内存要 59 个描述符,64 塞不下。见 docs/DISPLAY.md。
-    0003-virtio-gpu-ctrl-queue)      echo "hw/display/virtio-gpu-base.c" ;;
-    # Windows 每秒几十万次读 PMCCNTR,不拿 BQL 处理;外加 VIRTUALLY_HVF_STATS 退出统计。见 docs/PERFORMANCE.md。
-    0004-hvf-pmccntr-fast-path)      echo "target/arm/hvf/hvf.c target/arm/helper.c target/arm/internals.h" ;;
+    0002-virtio-gpu-ctrl-queue)      echo "hw/display/virtio-gpu-base.c" ;;
+    # VIRTUALLY_HVF_STATS=1:每秒往 QEMU 日志打一行,按类别统计 VM 退出与 vCPU 时间分配。
+    0003-hvf-exit-stats)             echo "target/arm/hvf/hvf.c" ;;
     *) echo "" ;;
   esac
 }

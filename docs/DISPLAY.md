@@ -42,7 +42,7 @@ guest 分辨率跟随窗口的物理像素（点对点），总像素上限是 *
 - 原因：viogpudo 挂内存时，每个页条目 16 字节，每 4K 条目占一个描述符，而且**不用间接描述符**
   （`CtrlQueue::QueueBuffer` → `AddBuf(..., NULL, 0)`）。5120×2880 共 14,400 页，要 57 个数据描述符，加上头和回复共 59 个。
   QEMU 2D 模式的控制队列只有 **64**（3D 模式是 256），队列里只要还有几条命令没回来就塞不进去，驱动不重试。
-- 修法：`patches/0003-virtio-gpu-ctrl-queue.patch` 把 2D 控制队列改成 256。
+- 修法：`patches/0002-virtio-gpu-ctrl-queue.patch` 把 2D 控制队列改成 256。
 - 快照兼容：`vring.num` 随迁移流保存（`virtio_save` / `virtio_load`）。旧 QEMU 存的挂起状态恢复后仍是 64，
   和 guest 里驱动已分配的环形缓冲区一致；冷启动后驱动才用上 256。
 
